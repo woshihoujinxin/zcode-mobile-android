@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_page">#0D0D0D</color>
+    <color name="bg_card">#1A1A1C</color>
+    <color name="stroke_card">#2A2A2E</color>
+    <color name="fg_primary">#F5F5F5</color>
+    <color name="fg_secondary">#9A9AA0</color>
+    <color name="fg_tertiary">#6B6B72</color>
+    <color name="btn_primary_bg">#F5F5F5</color>
+    <color name="btn_primary_fg">#0D0D0D</color>
+    <color name="btn_ghost_stroke">#2A2A2E</color>
+    <color name="status_dot">#F59E0B</color>
+    <color name="ic_launcher_background">#0D0D0D</color>
+</resources>
