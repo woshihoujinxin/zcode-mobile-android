@@ -72,4 +72,14 @@ public final class PairUrl {
             return "桌面端";
         }
     }
+
+    /** 提取桌面 deviceSid（sid 参数），作为绑定列表的唯一键。 */
+    public static String extractDeviceSid(String raw) {
+        try {
+            String sid = Uri.parse(raw).getQueryParameter("sid");
+            return sid == null || sid.trim().isEmpty() ? null : sid.trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

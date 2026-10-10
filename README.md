@@ -3,9 +3,10 @@
 手机扫码直连官方云（`zcode.z.ai`）远程控制 PC 桌面端 ZCode 的最小客户端。
 方案与协议逆向记录见 `docs/specs/android-app-mvp.md`（仓库根）。
 
-## 功能（MVP / L1）
+## 功能（v0.2.0 多桌面）
 
-- 扫码绑定：扫描桌面端 ZCode「Web 远程控制」二维码（`https://zcode.z.ai/remote/v4?sid=…&hash=…`）
+- **多桌面绑定**：可同时绑定多台 PC（各自扫码），设备列表点击切换；重扫同一桌面自动更新配对凭据；旧版单设备数据自动迁移
+- 扫码绑定：扫描桌面端 ZCode「Web 远程控制」二维码（`https://zcode.z.ai/remote/v4?sid=…&hash=…`），按 sid 去重
 - 粘贴连接链接兜底（桌面端二维码弹窗的「复制链接」可经任意渠道发到手机粘贴）
 - 域名白名单（zcode.z.ai / zcode.chatglm.site）+ 必须 https + 必须 sid/hash，防二维码劫持
 - 绑定凭据本机持久化，二次打开免扫码直接进入

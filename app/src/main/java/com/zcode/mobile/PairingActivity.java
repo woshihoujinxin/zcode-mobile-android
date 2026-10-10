@@ -3,9 +3,11 @@ package com.zcode.mobile;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -17,10 +19,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.journeyapps.barcodescanner.ScanContract;
 import com.journeyapps.barcodescanner.ScanOptions;
 
+import java.util.List;
+
 /**
- * 入口页：扫码绑定桌面端 / 进入已绑定的会话。
- *
- * 桌面端入口：ZCode 桌面版 → 工作区 →「Web 远程控制」，用本 App 扫描其二维码。
+ * 设备列表页（入口）：展示已绑定的多台桌面端，点击进入会话；
+ * 支持扫码/粘贴添加新桌面，删除已绑定桌面（对应桌面端重置配对后的重新绑定）。
  */
 public class PairingActivity extends AppCompatActivity {
 
@@ -42,12 +45,7 @@ public class PairingActivity extends AppCompatActivity {
             });
 
     private PrefStore prefStore;
-
-    private TextView statusTitle;
-    private TextView statusDetail;
-    private Button primaryButton;
-    private Button secondaryButton;
-    private TextView unbindButton;
+    private LinearLayout deviceList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,44 +53,47 @@ public class PairingActivity extends AppCompatActivity {
         setContentView(R.layout.activity_pairing);
         prefStore = new PrefStore(this);
 
-        statusTitle = findViewById(R.id.status_title);
-        statusDetail = findViewById(R.id.status_detail);
-        primaryButton = findViewById(R.id.btn_primary);
-        secondaryButton = findViewById(R.id.btn_secondary);
-        unbindButton = findViewById(R.id.btn_unbind);
+        deviceList = findViewById(R.id.device_list);
+        Button scanButton = findViewById(R.id.btn_scan_add);
+        Button pasteButton = findViewById(R.id.btn_paste_add);
 
-        primaryButton.setOnClickListener(v -> {
-            if (prefStore.isBound()) {
-                enterRemote();
-            } else {
-                startScanFlow();
-            }
-        });
-        secondaryButton.setOnClickListener(v -> showPasteDialog());
-        unbindButton.setOnClickListener(v -> confirmUnbind());
+        scanButton.setOnClickListener(v -> startScanFlow());
+        pasteButton.setOnClickListener(v -> showPasteDialog());
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        renderState();
+        renderDeviceList();
     }
 
-    private void renderState() {
-        if (prefStore.isBound()) {
-            statusTitle.setText(R.string.status_bound_title);
-            String detail = getString(R.string.status_bound_detail, prefStore.getDeviceName());
-            statusDetail.setText(detail);
-            primaryButton.setText(R.string.btn_enter_session);
-            secondaryButton.setText(R.string.btn_scan_new);
-            unbindButton.setVisibility(View.VISIBLE);
-        } else {
-            statusTitle.setText(R.string.status_unbound_title);
-            statusDetail.setText(R.string.status_unbound_detail);
-            primaryButton.setText(R.string.btn_scan_connect);
-            secondaryButton.setText(R.string.btn_paste_link);
-            unbindButton.setVisibility(View.GONE);
+    private void renderDeviceList() {
+        deviceList.removeAllViews();
+        List<PairedDevice> devices = prefStore.getDevices();
+        for (PairedDevice device : devices) {
+            View item = LayoutInflater.from(this).inflate(R.layout.item_device, deviceList, false);
+            TextView nameView = item.findViewById(R.id.device_name);
+            TextView metaView = item.findViewById(R.id.device_meta);
+            nameView.setText(device.name);
+            metaView.setText(getString(R.string.device_meta,
+                    android.text.format.DateFormat.format("MM-dd HH:mm", device.boundAt)));
+            item.setOnClickListener(v -> enterRemote(device.id));
+            View removeButton = item.findViewById(R.id.device_remove);
+            removeButton.setOnClickListener(v -> confirmRemove(device));
+            deviceList.addView(item);
         }
+    }
+
+    private void confirmRemove(PairedDevice device) {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.unbind_title)
+                .setMessage(getString(R.string.unbind_message, device.name))
+                .setPositiveButton(R.string.dialog_unbind, (dialog, which) -> {
+                    prefStore.remove(device.id);
+                    renderDeviceList();
+                })
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
     }
 
     private void startScanFlow() {
@@ -141,24 +142,26 @@ public class PairingActivity extends AppCompatActivity {
                     .show();
             return;
         }
-        prefStore.save(normalized, PairUrl.extractDeviceName(normalized));
-        Toast.makeText(this, R.string.paired_toast, Toast.LENGTH_SHORT).show();
-        enterRemote();
+        String sid = PairUrl.extractDeviceSid(normalized);
+        if (sid == null) {
+            Toast.makeText(this, R.string.invalid_qr_message, Toast.LENGTH_LONG).show();
+            return;
+        }
+        // 同 sid 视为重绑（更新 hash），否则新增设备。
+        PairedDevice existing = prefStore.getDevice(sid);
+        String name = PairUrl.extractDeviceName(normalized);
+        prefStore.addOrReplace(new PairedDevice(sid, normalized, name, System.currentTimeMillis()));
+        Toast.makeText(this,
+                existing == null
+                        ? getString(R.string.paired_toast, name)
+                        : getString(R.string.repaired_toast, name),
+                Toast.LENGTH_SHORT).show();
+        enterRemote(sid);
     }
 
-    private void confirmUnbind() {
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.unbind_title)
-                .setMessage(getString(R.string.unbind_message, prefStore.getDeviceName()))
-                .setPositiveButton(R.string.dialog_unbind, (dialog, which) -> {
-                    prefStore.clear();
-                    renderState();
-                })
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show();
-    }
-
-    private void enterRemote() {
-        startActivity(new Intent(this, RemoteActivity.class));
+    private void enterRemote(String deviceId) {
+        Intent intent = new Intent(this, RemoteActivity.class);
+        intent.putExtra(RemoteActivity.EXTRA_DEVICE_ID, deviceId);
+        startActivity(intent);
     }
 }

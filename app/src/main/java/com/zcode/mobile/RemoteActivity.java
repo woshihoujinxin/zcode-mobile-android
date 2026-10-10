@@ -29,6 +29,8 @@ import androidx.appcompat.app.AppCompatActivity;
  */
 public class RemoteActivity extends AppCompatActivity {
 
+    public static final String EXTRA_DEVICE_ID = "device_id";
+
     private WebView webView;
     private View errorOverlay;
     private String remoteUrl;
@@ -70,11 +72,17 @@ public class RemoteActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this, backCallback);
 
         PrefStore prefStore = new PrefStore(this);
-        remoteUrl = prefStore.getRemoteUrl();
-        if (remoteUrl == null) {
+        String deviceId = getIntent().getStringExtra(EXTRA_DEVICE_ID);
+        if (deviceId == null) {
+            deviceId = prefStore.getLastDeviceId();
+        }
+        PairedDevice device = prefStore.getDevice(deviceId);
+        if (device == null) {
             finish();
             return;
         }
+        prefStore.setLastDeviceId(device.id);
+        remoteUrl = device.url;
 
         webView = findViewById(R.id.web_view);
         errorOverlay = findViewById(R.id.error_overlay);

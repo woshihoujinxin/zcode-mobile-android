@@ -5,16 +5,12 @@
     <string name="hero_title">ZCode</string>
     <string name="hero_subtitle">连接桌面端，接管你的 AI 会话</string>
 
-    <string name="status_unbound_title">未绑定桌面端</string>
-    <string name="status_unbound_detail">在电脑上打开 ZCode 桌面端的「Web 远程控制」，生成二维码后用本应用扫码，即可在手机上查看工作区、任务与会话，并与 AI 继续对话。</string>
-    <string name="status_bound_title">已绑定桌面端</string>
-    <string name="status_bound_detail">已连接「%1$s」。若桌面端重置了配对，请重新扫码。</string>
-
-    <string name="btn_scan_connect">扫码连接桌面端</string>
-    <string name="btn_enter_session">进入会话</string>
-    <string name="btn_scan_new">扫码连接其他桌面</string>
-    <string name="btn_paste_link">粘贴连接链接</string>
+    <string name="device_list_title">我的桌面</string>
+    <string name="device_meta">绑定于 %1$s</string>
+    <string name="btn_scan_add">扫码添加桌面端</string>
+    <string name="btn_paste_add">粘贴连接链接</string>
     <string name="btn_unbind">解除绑定</string>
+    <string name="pair_hint">在电脑 ZCode 桌面端打开「Web 远程控制」生成二维码；\n多台电脑可分别扫码绑定，随时切换。</string>
 
     <string name="scan_prompt">将二维码放入框内扫描</string>
     <string name="camera_permission_denied">需要相机权限才能扫描二维码，请在系统设置中授权</string>
@@ -23,10 +19,11 @@
     <string name="paste_hint">https://zcode.z.ai/remote/v4?sid=…&amp;hash=…</string>
     <string name="invalid_qr_title">无法识别的二维码</string>
     <string name="invalid_qr_message">这不是有效的 ZCode 远程控制二维码。请确认扫描的是桌面端「Web 远程控制」生成的二维码，或改用「粘贴连接链接」。</string>
-    <string name="paired_toast">连接成功</string>
+    <string name="paired_toast">已绑定「%1$s」</string>
+    <string name="repaired_toast">已更新「%1$s」的配对凭据</string>
 
     <string name="unbind_title">解除绑定？</string>
-    <string name="unbind_message">将断开与「%1$s」的连接，需要重新扫码才能恢复。</string>
+    <string name="unbind_message">将移除「%1$s」，之后需重新扫码才能连接该桌面。</string>
     <string name="dialog_connect">连接</string>
     <string name="dialog_cancel">取消</string>
     <string name="dialog_retry">重试</string>
