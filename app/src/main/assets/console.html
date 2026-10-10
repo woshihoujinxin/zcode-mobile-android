@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZCode 群控台</title>
+<style>
+  :root {
+    --bg: #0d0d0d; --card: #1a1a1c; --stroke: #2a2a2e;
+    --fg: #f5f5f5; --sub: #9a9aa0; --dim: #6b6b72; --accent: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--stroke); flex: none; }
+  header .logo { width: 26px; height: 26px; border-radius: 7px; background: var(--card); border: 1px solid var(--stroke); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); }
+  header h1 { font-size: 15px; font-weight: 600; }
+  header .meta { color: var(--sub); font-size: 12px; }
+  header .spacer { flex: 1; }
+  .layout-btn { background: var(--card); border: 1px solid var(--stroke); color: var(--fg); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .layout-btn.active { border-color: var(--accent); color: var(--accent); }
+  aside { width: 210px; border-right: 1px solid var(--stroke); padding: 12px; overflow-y: auto; flex: none; }
+  aside .section { color: var(--sub); font-size: 11px; letter-spacing: .08em; margin: 4px 0 10px; }
+  .device { background: var(--card); border: 1px solid var(--stroke); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s; }
+  .device:hover { border-color: var(--dim); }
+  .device.active { border-color: var(--accent); }
+  .device .name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .device .name .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+  .device .when { color: var(--sub); font-size: 11px; margin-top: 2px; }
+  .device .open-hint { color: var(--dim); font-size: 11px; margin-top: 6px; display: none; }
+  .device.active .open-hint { display: block; color: var(--accent); }
+  main { flex: 1; display: grid; gap: 10px; padding: 10px; overflow: hidden; }
+  main.g1 { grid-template-columns: 1fr; }
+  main.g2 { grid-template-columns: 1fr 1fr; }
+  main.g4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .tile { background: var(--card); border: 1px solid var(--stroke); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .tile .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--stroke); flex: none; }
+  .tile .bar .t { font-size: 12px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .bar button { background: none; border: none; color: var(--sub); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 6px; }
+  .tile .bar button:hover { color: var(--fg); background: rgba(255,255,255,.06); }
+  .tile iframe { flex: 1; width: 100%; border: 0; background: #000; }
+  .empty { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--dim); gap: 8px; }
+  .empty .big { font-size: 15px; color: var(--sub); }
+  .hintbar { padding: 6px 16px; color: var(--dim); font-size: 11px; border-top: 1px solid var(--stroke); flex: none; }
+  #toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: #26262a; color: var(--fg); border: 1px solid var(--stroke); padding: 8px 16px; border-radius: 10px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 900px) { aside { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Z</div>
+  <h1>ZCode 群控台</h1>
+  <span class="meta" id="meta">加载中…</span>
+  <div class="spacer"></div>
+  <button class="layout-btn active" data-g="1" title="单屏">单屏</button>
+  <button class="layout-btn" data-g="2" title="双列">双列</button>
+  <button class="layout-btn" data-g="4" title="四宫格">四宫格</button>
+</header>
+<div style="display:flex; flex:1; min-height:0;">
+  <aside>
+    <div class="section">已绑定桌面</div>
+    <div id="devices"></div>
+  </aside>
+  <main id="grid" class="g1"></main>
+</div>
+<div class="hintbar">点击左侧设备在当前空格打开其会话页；格子内可独立操作（与手机端同一会话，凭据相同）。布局：单屏 / 双列 / 四宫格。</div>
+<div id="toast"></div>
+<script>
+const qs = new URLSearchParams(location.search);
+const token = qs.get('token') || '';
+const state = { devices: [], tiles: [], layout: '1', nextSlot: 0 };
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+async function loadDevices() {
+  try {
+    const res = await fetch('/api/devices?token=' + encodeURIComponent(token));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    state.devices = data.devices || [];
+  } catch (e) {
+    state.devices = [];
+    toast('设备列表加载失败：' + e.message);
+  }
+  renderSidebar();
+  renderMeta();
+  renderGrid();
+}
+
+function renderMeta() {
+  document.getElementById('meta').textContent =
+    state.devices.length + ' 台桌面 · ' + state.tiles.length + ' 个会话窗口';
+}
+
+function renderSidebar() {
+  const box = document.getElementById('devices');
+  box.innerHTML = '';
+  if (!state.devices.length) {
+    box.innerHTML = '<div style="color:var(--dim);font-size:12px;">手机上尚未绑定桌面端</div>';
+    return;
+  }
+  for (const d of state.devices) {
+    const el = document.createElement('div');
+    el.className = 'device';
+    const when = new Date(d.boundAt);
+    const pad = n => String(n).padStart(2, '0');
+    el.innerHTML = '<div class="name"><span class="dot"></span>' + escapeHtml(d.name) + '</div>'
+      + '<div class="when">绑定于 ' + (pad(when.getMonth()+1)) + '-' + pad(when.getDate()) + '</div>'
+      + '<div class="open-hint">点击打开</div>';
+    el.onclick = () => openTile(d);
+    box.appendChild(el);
+  }
+}
+
+function maxTiles() {
+  return state.layout === '1' ? 1 : state.layout === '2' ? 2 : 4;
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.className = 'g' + state.layout;
+  while (state.tiles.length > maxTiles()) {
+    state.tiles.pop();
+  }
+  if (!state.tiles.length) {
+    grid.innerHTML = '<div class="empty"><div class="big">从左侧选择一台桌面开始</div>'
+      + '<div>每个格子是独立的完整会话页，可同时监控 / 操作多台桌面</div></div>';
+    return;
+  }
+  grid.innerHTML = '';
+  for (const tile of state.tiles) {
+    const el = document.createElement('div');
+    el.className = 'tile';
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const title = document.createElement('span');
+    title.className = 't';
+    title.textContent = tile.device ? tile.device.name : '空';
+    const reload = document.createElement('button');
+    reload.textContent = '刷新';
+    reload.onclick = () => { const f = el.querySelector('iframe'); if (f) f.src = f.src; };
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.onclick = () => {
+      state.tiles = state.tiles.filter(t => t !== tile);
+      renderGrid();
+      renderMeta();
+    };
+    bar.append(title, reload, close);
+    el.appendChild(bar);
+    const iframe = document.createElement('iframe');
+    iframe.src = tile.device.url;
+    iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
+    el.appendChild(iframe);
+    grid.appendChild(el);
+  }
+}
+
+function openTile(device) {
+  const existing = state.tiles.find(t => t.device && t.device.id === device.id);
+  if (existing) {
+    toast(device.name + ' 已在网格中');
+    return;
+  }
+  const tile = { device };
+  if (state.tiles.length < maxTiles()) {
+    state.tiles.push(tile);
+  } else {
+    state.tiles[state.nextSlot % maxTiles()] = tile;
+    state.nextSlot += 1;
+  }
+  renderGrid();
+  renderMeta();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+for (const btn of document.querySelectorAll('.layout-btn')) {
+  btn.onclick = () => {
+    for (const b of document.querySelectorAll('.layout-btn')) b.classList.remove('active');
+    btn.classList.add('active');
+    state.layout = btn.dataset.g;
+    renderGrid();
+  };
+}
+
+loadDevices();
+setInterval(loadDevices, 15000);
+</script>
+</body>
+</html>

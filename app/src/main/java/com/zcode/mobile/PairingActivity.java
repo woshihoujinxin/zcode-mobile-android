@@ -10,6 +10,14 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.widget.ImageView;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -46,6 +54,8 @@ public class PairingActivity extends AppCompatActivity {
 
     private PrefStore prefStore;
     private LinearLayout deviceList;
+    private ControlServer controlServer;
+    private String controlUrl;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +69,7 @@ public class PairingActivity extends AppCompatActivity {
 
         scanButton.setOnClickListener(v -> startScanFlow());
         pasteButton.setOnClickListener(v -> showPasteDialog());
+        findViewById(R.id.btn_control).setOnClickListener(v -> showControlDialog());
     }
 
     @Override
@@ -81,6 +92,113 @@ public class PairingActivity extends AppCompatActivity {
             View removeButton = item.findViewById(R.id.device_remove);
             removeButton.setOnClickListener(v -> confirmRemove(device));
             deviceList.addView(item);
+        }
+    }
+
+
+    /** PC 群控台：局域网 Web 服务开关与地址展示（URL + 二维码）。 */
+    private void showControlDialog() {
+        View form = getLayoutInflater().inflate(R.layout.dialog_control, null);
+        TextView status = form.findViewById(R.id.control_status);
+        TextView urlView = form.findViewById(R.id.control_url);
+        ImageView qrView = form.findViewById(R.id.control_qr);
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                .setTitle(R.string.control_title)
+                .setView(form)
+                .setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(R.string.control_copy, null)
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
+        // 中立按钮不关弹窗：点击复制当前地址。
+        dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(b -> {
+            CharSequence url = urlView.getText();
+            if (url.length() > 0) {
+                ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("zcode-control", url));
+                Toast.makeText(this, R.string.control_copied, Toast.LENGTH_SHORT).show();
+            }
+        });
+        if (controlServer != null) {
+            renderControlRunning(form, status, urlView, qrView, controlUrl);
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setText(R.string.control_stop);
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener(b -> {
+                stopControlServer();
+                dialog.dismiss();
+            });
+            return;
+        }
+        status.setText(R.string.control_off_status);
+        urlView.setVisibility(View.GONE);
+        qrView.setVisibility(View.GONE);
+        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setText(R.string.control_start);
+        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener(b -> {
+            controlServer = ControlServer.start(this, prefStore, new ControlServer.Listener() {
+                @Override
+                public void onServerStarted(String url) {
+                    controlUrl = url;
+                    runOnUiThread(() -> {
+                        if (dialog.isShowing()) {
+                            renderControlRunning(form, status, urlView, qrView, url);
+                        }
+                    });
+                }
+
+                @Override
+                public void onServerError(String message) {
+                    runOnUiThread(() -> {
+                        controlServer = null;
+                        Toast.makeText(PairingActivity.this,
+                                getString(R.string.control_error_toast, message),
+                                Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+            if (controlServer == null) {
+                Toast.makeText(this, R.string.control_no_wifi, Toast.LENGTH_LONG).show();
+            } else {
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setText(R.string.control_stop);
+                dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener(nb -> {
+                    stopControlServer();
+                    dialog.dismiss();
+                });
+            }
+        });
+    }
+
+    private void renderControlRunning(View form, TextView status, TextView urlView,
+                                       ImageView qrView, String url) {
+        if (url == null) {
+            status.setText(R.string.control_no_wifi);
+            return;
+        }
+        status.setText(R.string.control_on_status);
+        urlView.setText(url);
+        urlView.setVisibility(View.VISIBLE);
+        qrView.setImageBitmap(generateQr(url));
+        qrView.setVisibility(View.VISIBLE);
+    }
+
+
+    private void stopControlServer() {
+        if (controlServer != null) {
+            controlServer.stop();
+            controlServer = null;
+        }
+        controlUrl = null;
+    }
+
+    private static Bitmap generateQr(String content) {
+        try {
+            BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, 640, 640);
+            Bitmap bitmap = Bitmap.createBitmap(640, 640, Bitmap.Config.RGB_565);
+            for (int x = 0; x < 640; x++) {
+                for (int y = 0; y < 640; y++) {
+                    bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
+                }
+            }
+            return bitmap;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -163,5 +281,11 @@ public class PairingActivity extends AppCompatActivity {
         Intent intent = new Intent(this, RemoteActivity.class);
         intent.putExtra(RemoteActivity.EXTRA_DEVICE_ID, deviceId);
         startActivity(intent);
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopControlServer();
+        super.onDestroy();
     }
 }
