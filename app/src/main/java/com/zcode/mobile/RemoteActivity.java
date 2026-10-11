@@ -218,6 +218,8 @@ public class RemoteActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (directMode) {
+                    // 直连模式没有 relay 凭据可探测：主文档加载完成即视为连通（状态灯变绿）。
+                    prefStore.setCredStatus(deviceId, CredentialHealth.STATUS_VALID);
                     // 每页就绪后重挂下载拦截（SPA 路由会换文档的情况也已覆盖）。
                     view.evaluateJavascript(DshDownloader.clickInterceptorScript(), null);
                 }
@@ -226,9 +228,15 @@ public class RemoteActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 // 只拦截主文档加载失败；子资源失败由页面自行降级。
-                if (request.isForMainFrame() && !pendingPrecheck) {
-                    showError(null, getString(R.string.error_load_failed,
-                            error == null ? "" : String.valueOf(error.getDescription())));
+                if (request.isForMainFrame()) {
+                    if (directMode) {
+                        // 直连设备无凭据语义：加载失败按「未检测」处理（灰灯），而非凭据失效。
+                        prefStore.setCredStatus(deviceId, CredentialHealth.STATUS_UNKNOWN);
+                    }
+                    if (!pendingPrecheck) {
+                        showError(null, getString(R.string.error_load_failed,
+                                error == null ? "" : String.valueOf(error.getDescription())));
+                    }
                 }
             }
 

@@ -19,6 +19,8 @@ public final class PrefStore {
     private static final String KEY_LAST_DEVICE = "last_device_id";
     private static final String PREFIX_CRED_STATUS = "cred_status_";
     private static final String PREFIX_CRED_PROBED = "cred_probed_";
+    private static final String PREFIX_AUTH_USER = "auth_user_";
+    private static final String PREFIX_AUTH_PASS = "auth_pass_";
     // 旧版单设备键，仅用于迁移。
     private static final String LEGACY_KEY_URL = "remote_url";
     private static final String LEGACY_KEY_NAME = "device_name";

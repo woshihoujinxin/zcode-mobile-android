@@ -66,11 +66,9 @@ public class PairingActivity extends AppCompatActivity {
 
         deviceList = findViewById(R.id.device_list);
         Button scanButton = findViewById(R.id.btn_scan_add);
-        Button pasteButton = findViewById(R.id.btn_paste_add);
         Button directButton = findViewById(R.id.btn_direct_add);
 
         scanButton.setOnClickListener(v -> startScanFlow());
-        pasteButton.setOnClickListener(v -> showPasteDialog());
         directButton.setOnClickListener(v -> showDirectDialog());
         findViewById(R.id.btn_control).setOnClickListener(v -> showControlDialog());
 
@@ -326,23 +324,6 @@ public class PairingActivity extends AppCompatActivity {
         options.setBeepEnabled(false);
         options.setOrientationLocked(true);
         barcodeLauncher.launch(options);
-    }
-
-    private void showPasteDialog() {
-        EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setHint(R.string.paste_hint);
-        int padding = (int) (16 * getResources().getDisplayMetrics().density);
-        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
-        container.setPadding(padding, padding / 2, padding, 0);
-        container.addView(input);
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.paste_title)
-                .setView(container)
-                .setPositiveButton(R.string.dialog_connect, (dialog, which) ->
-                        handlePairInput(input.getText().toString()))
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .show();
     }
 
     /** 直连自建服务器：手输地址（http/https 任意主机），无 relay 凭据，认证走 nginx 基本认证。 */
