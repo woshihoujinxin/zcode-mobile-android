@@ -291,12 +291,16 @@ function openTile(device) {
     if (existing.device.id !== device.id || existing.device.url !== device.url) {
       // 手机端已换新凭据而格子还是旧凭据：立即换新。
       existing.device = device;
-      renderGrid();
+      const f = document.querySelector('iframe[data-device-id="' + cssEscape(existing.device.id) + '"]');
+      if (f) f.src = device.url;
       renderMeta();
       toast(device.name + ' 已换用新凭据');
       return;
     }
-    toast(device.name + ' 已在网格中');
+    // 再次点击 = 强制重连：原地刷新该格子的会话（踢掉僵尸连接，重新认证），不影响其它格子。
+    const f = document.querySelector('iframe[data-device-id="' + cssEscape(existing.device.id) + '"]');
+    if (f) f.src = existing.device.url;
+    toast(device.name + ' 已重新连接');
     return;
   }
   const tile = { device };
