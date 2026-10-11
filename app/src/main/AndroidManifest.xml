@@ -20,10 +20,20 @@
         <activity
             android:name=".PairingActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- 深链接绑定：在手机浏览器/聊天工具里点开桌面端「复制链接」即可直接绑定。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="zcode.z.ai" android:pathPrefix="/remote/" />
+                <data android:scheme="https" android:host="zcode.chatglm.site" android:pathPrefix="/remote/" />
+                <data android:scheme="https" android:host="www.zcode.z.ai" android:pathPrefix="/remote/" />
             </intent-filter>
         </activity>
 

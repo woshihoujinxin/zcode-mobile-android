@@ -20,20 +20,22 @@
         android:visibility="gone">
 
         <TextView
+            android:id="@+id/error_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/error_load_failed"
-            android:textColor="@color/fg_secondary"
-            android:textSize="14sp"
-            android:gravity="center" />
+            android:textColor="@color/fg_primary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/error_message"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="@color/fg_tertiary"
-            android:textSize="12sp"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/fg_secondary"
+            android:textSize="14sp"
             android:gravity="center" />
 
         <Button
@@ -47,6 +49,35 @@
             android:paddingEnd="32dp"
             android:text="@string/btn_retry"
             android:textColor="@color/btn_primary_fg"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btn_rescan"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_btn_primary"
+            android:stateListAnimator="@null"
+            android:paddingStart="32dp"
+            android:paddingEnd="32dp"
+            android:text="@string/btn_rescan"
+            android:textColor="@color/btn_primary_fg"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/btn_open_anyway"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:paddingStart="32dp"
+            android:paddingEnd="32dp"
+            android:text="@string/btn_open_anyway"
+            android:textColor="@color/fg_secondary"
+            android:textSize="14sp"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

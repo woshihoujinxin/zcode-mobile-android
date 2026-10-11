@@ -31,6 +31,17 @@
 
     <string name="error_load_failed">页面加载失败：%1$s\n请检查网络后重试。</string>
     <string name="btn_retry">重新加载</string>
+
+    <string name="cred_checking">正在验证配对凭据…</string>
+    <string name="cred_status_valid">凭据有效</string>
+    <string name="cred_status_stale">凭据已失效</string>
+    <string name="cred_status_unknown">未检测</string>
+    <string name="device_meta_with_status">绑定于 %1$s · %2$s</string>
+    <string name="stale_title">配对凭据已失效</string>
+    <string name="stale_message">「%1$s」的配对凭据已被服务端拒绝。\n\n常见原因：电脑端重置过配对（sid/hash 轮换），或电脑端长时间离线导致注册过期。\n\n请在电脑端重新打开「Web 远程控制」并扫码重新绑定；手机与 PC 群控台会在凭据更新后自动恢复。</string>
+    <string name="btn_rescan">重新扫码</string>
+    <string name="btn_open_anyway">仍要打开</string>
+    <string name="rescanned_reload">已更新凭据，正在重新连接…</string>
     <string name="btn_control">PC 群控</string>
     <string name="control_title">电脑群控台</string>
     <string name="control_off_status">在同一 Wi-Fi 下，用电脑浏览器打开群控台，可网格化同时操作多台桌面的会话。</string>

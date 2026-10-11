@@ -189,17 +189,35 @@ public final class ControlServer {
                 return;
             }
             if (path.equals("/api/devices")) {
+                List<PairedDevice> devices = prefStore.getDevices();
+                // 群控台轮询即触发凭据健康度补探测（内部节流），凭据失效可被 PC 端及时看到。
+                CredentialHealth.refresh(context, devices, null);
+                StringBuilder versionSeed = new StringBuilder();
                 JSONArray array = new JSONArray();
-                for (PairedDevice device : prefStore.getDevices()) {
+                for (PairedDevice device : devices) {
                     JSONObject item = new JSONObject();
-                    item.put("id", device.id);
-                    item.put("name", device.name);
-                    item.put("url", device.url);
-                    item.put("boundAt", device.boundAt);
-                    array.put(item);
+                    try {
+                        item.put("id", device.id);
+                        item.put("name", device.name);
+                        item.put("url", device.url);
+                        item.put("boundAt", device.boundAt);
+                        if (device.mid != null) {
+                            item.put("mid", device.mid);
+                        }
+                        item.put("credsHash", credsHash(device.url));
+                        item.put("credStatus", CredentialHealth.statusFor(prefStore, device.id));
+                        item.put("credProbedAt", CredentialHealth.probedAtFor(prefStore, device.id));
+                        array.put(item);
+                    } catch (Exception ignored) {
+                    }
+                    versionSeed.append(credsHash(device.url)).append(',');
                 }
                 JSONObject result = new JSONObject();
-                result.put("devices", array);
+                try {
+                    result.put("devices", array);
+                    result.put("version", Integer.toHexString(versionSeed.toString().hashCode()));
+                } catch (Exception ignored) {
+                }
                 respond(out, 200, "application/json", result.toString());
                 return;
             }
@@ -211,6 +229,11 @@ public final class ControlServer {
             } catch (IOException ignored) {
             }
         }
+    }
+
+    /** 凭据变更指纹：url 一变（重扫更新 hash / 换发 sid）即视为新凭据。 */
+    private static String credsHash(String url) {
+        return Integer.toHexString(url == null ? 0 : url.hashCode()) + ":" + (url == null ? 0 : url.length());
     }
 
     private static String param(String query, String key) {

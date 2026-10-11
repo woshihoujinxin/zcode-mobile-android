@@ -1,6 +1,7 @@
 package com.zcode.mobile;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
@@ -70,12 +71,72 @@ public class PairingActivity extends AppCompatActivity {
         scanButton.setOnClickListener(v -> startScanFlow());
         pasteButton.setOnClickListener(v -> showPasteDialog());
         findViewById(R.id.btn_control).setOnClickListener(v -> showControlDialog());
+
+        handleDeepLink(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleDeepLink(intent);
+    }
+
+    /** 深链接绑定：浏览器/聊天工具点开「https://官方域/remote/v4?sid=…」直接进入绑定流程。 */
+    private void handleDeepLink(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
+            return;
+        }
+        Uri data = intent.getData();
+        if (data == null) {
+            return;
+        }
+        String normalized = PairUrl.parse(data.toString());
+        if (normalized == null) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.invalid_qr_title)
+                    .setMessage(R.string.invalid_qr_message)
+                    .setPositiveButton(R.string.dialog_retry, (d, w) -> startScanFlow())
+                    .setNegativeButton(R.string.dialog_cancel, null)
+                    .show();
+            return;
+        }
+        String sid = PairUrl.extractDeviceSid(normalized);
+        String mid = PairUrl.extractDeviceMid(normalized);
+        if (sid == null) {
+            Toast.makeText(this, R.string.invalid_qr_message, Toast.LENGTH_LONG).show();
+            return;
+        }
+        PairedDevice existing = prefStore.getDevice(sid);
+        if (existing == null && mid != null) {
+            existing = prefStore.getDeviceByMid(mid);
+        }
+        String name = PairUrl.extractDeviceName(normalized);
+        prefStore.addOrReplace(new PairedDevice(sid, normalized, name, System.currentTimeMillis(), mid));
+        Toast.makeText(this,
+                existing == null
+                        ? getString(R.string.paired_toast, name)
+                        : getString(R.string.repaired_toast, name),
+                Toast.LENGTH_SHORT).show();
+        enterRemote(sid);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         renderDeviceList();
+        CredentialHealth.refresh(this, prefStore.getDevices(), this::renderDeviceStatuses);
+    }
+
+    /** 探测完成后只刷新状态点与 meta 行，不重建列表（避免打断点击）。 */
+    private void renderDeviceStatuses() {
+        for (int i = 0; i < deviceList.getChildCount(); i++) {
+            View item = deviceList.getChildAt(i);
+            String sid = (String) item.getTag(R.id.device_status_dot);
+            if (sid == null) {
+                continue;
+            }
+            applyStatus(item, prefStore.getDevice(sid));
+        }
     }
 
     private void renderDeviceList() {
@@ -84,15 +145,56 @@ public class PairingActivity extends AppCompatActivity {
         for (PairedDevice device : devices) {
             View item = LayoutInflater.from(this).inflate(R.layout.item_device, deviceList, false);
             TextView nameView = item.findViewById(R.id.device_name);
-            TextView metaView = item.findViewById(R.id.device_meta);
             nameView.setText(device.name);
-            metaView.setText(getString(R.string.device_meta,
-                    android.text.format.DateFormat.format("MM-dd HH:mm", device.boundAt)));
-            item.setOnClickListener(v -> enterRemote(device.id));
+            item.setTag(R.id.device_status_dot, device.id);
+            applyStatus(item, device);
+            item.setOnClickListener(v -> onDeviceClicked(device));
             View removeButton = item.findViewById(R.id.device_remove);
             removeButton.setOnClickListener(v -> confirmRemove(device));
             deviceList.addView(item);
         }
+    }
+
+    private void applyStatus(View item, PairedDevice device) {
+        if (device == null) {
+            return;
+        }
+        View dot = item.findViewById(R.id.device_status_dot);
+        TextView metaView = item.findViewById(R.id.device_meta);
+        String status = CredentialHealth.statusFor(prefStore, device.id);
+        int dotColor;
+        String statusText;
+        switch (status) {
+            case CredentialHealth.STATUS_VALID:
+                dotColor = 0xFF22C55E;
+                statusText = getString(R.string.cred_status_valid);
+                break;
+            case CredentialHealth.STATUS_STALE:
+                dotColor = 0xFFEF4444;
+                statusText = getString(R.string.cred_status_stale);
+                break;
+            default:
+                dotColor = 0xFF6B6B72;
+                statusText = getString(R.string.cred_status_unknown);
+                break;
+        }
+        dot.setBackgroundTintList(android.content.res.ColorStateList.valueOf(dotColor));
+        CharSequence when = android.text.format.DateFormat.format("MM-dd HH:mm", device.boundAt);
+        metaView.setText(getString(R.string.device_meta_with_status, when, statusText));
+    }
+
+    private void onDeviceClicked(PairedDevice device) {
+        if (CredentialHealth.STATUS_STALE.equals(CredentialHealth.statusFor(prefStore, device.id))) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.stale_title)
+                    .setMessage(getString(R.string.stale_message, device.name))
+                    .setPositiveButton(R.string.btn_rescan, (d, w) -> startScanFlow())
+                    .setNegativeButton(R.string.dialog_cancel, null)
+                    .setNeutralButton(R.string.btn_open_anyway, (d, w) -> enterRemote(device.id))
+                    .show();
+            return;
+        }
+        enterRemote(device.id);
     }
 
 
@@ -261,14 +363,18 @@ public class PairingActivity extends AppCompatActivity {
             return;
         }
         String sid = PairUrl.extractDeviceSid(normalized);
+        String mid = PairUrl.extractDeviceMid(normalized);
         if (sid == null) {
             Toast.makeText(this, R.string.invalid_qr_message, Toast.LENGTH_LONG).show();
             return;
         }
-        // 同 sid 视为重绑（更新 hash），否则新增设备。
+        // 同 sid 视为重绑（更新 hash）；桌面重置配对后 sid 会换发，此时按 mid（机器标识）识别同一台桌面。
         PairedDevice existing = prefStore.getDevice(sid);
+        if (existing == null && mid != null) {
+            existing = prefStore.getDeviceByMid(mid);
+        }
         String name = PairUrl.extractDeviceName(normalized);
-        prefStore.addOrReplace(new PairedDevice(sid, normalized, name, System.currentTimeMillis()));
+        prefStore.addOrReplace(new PairedDevice(sid, normalized, name, System.currentTimeMillis(), mid));
         Toast.makeText(this,
                 existing == null
                         ? getString(R.string.paired_toast, name)

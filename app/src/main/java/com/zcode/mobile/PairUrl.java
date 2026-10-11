@@ -82,4 +82,14 @@ public final class PairUrl {
             return null;
         }
     }
+
+    /** 提取桌面机器标识（mid 参数）；重置配对后 sid/hash 轮换但 mid 不变，用于识别同一台桌面。 */
+    public static String extractDeviceMid(String raw) {
+        try {
+            String mid = Uri.parse(raw).getQueryParameter("mid");
+            return mid == null || mid.trim().isEmpty() ? null : mid.trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

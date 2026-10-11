@@ -15,14 +15,19 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanOptions;
+
 /**
  * 远控容器：加载官方手机远控页（remote/v4?sid=...&hash=...）。
  * 会话列表、任务接管、权限审批均由官方页面提供，本容器负责：
+ *  - 打开前凭据预检（RelayProbe）：凭据被 relay 拒绝时给中文引导 + 重新扫码，而非官方英文 AUTH_FAILED 终态页
  *  - 域名白名单导航拦截（页面内跳转仅允许官方域，外链交给系统浏览器）
  *  - 附件选择（onShowFileChooser）
  *  - 网络错误重试与渲染进程崩溃自愈
@@ -33,7 +38,11 @@ public class RemoteActivity extends AppCompatActivity {
 
     private WebView webView;
     private View errorOverlay;
+    private PrefStore prefStore;
+    private String deviceId;
     private String remoteUrl;
+    /** 预检完成前不加载官方页，避免凭据已失效时闪过一屏英文错误。 */
+    private boolean pendingPrecheck = true;
 
     private ValueCallback<Uri[]> filePathCallback;
     private final ActivityResultLauncher<Intent> fileChooserLauncher =
@@ -48,6 +57,33 @@ public class RemoteActivity extends AppCompatActivity {
                 }
                 filePathCallback.onReceiveValue(results);
                 filePathCallback = null;
+            });
+
+    private final ActivityResultLauncher<ScanOptions> rescanLauncher =
+            registerForActivityResult(new ScanContract(), result -> {
+                String content = result.getContents();
+                if (content == null) {
+                    return;
+                }
+                String normalized = PairUrl.parse(content);
+                if (normalized == null) {
+                    Toast.makeText(this, R.string.invalid_qr_message, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String sid = PairUrl.extractDeviceSid(normalized);
+                String mid = PairUrl.extractDeviceMid(normalized);
+                if (sid == null) {
+                    Toast.makeText(this, R.string.invalid_qr_message, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                // 重新扫码即重新绑定（同 sid 或同 mid 视为同一桌面），随后用新凭据重连。
+                prefStore.addOrReplace(new PairedDevice(sid, normalized,
+                        PairUrl.extractDeviceName(normalized), System.currentTimeMillis(), mid));
+                deviceId = sid;
+                remoteUrl = normalized;
+                Toast.makeText(this, R.string.rescanned_reload, Toast.LENGTH_SHORT).show();
+                hideOverlay();
+                webView.loadUrl(remoteUrl);
             });
 
     private final androidx.activity.OnBackPressedCallback backCallback =
@@ -71,8 +107,8 @@ public class RemoteActivity extends AppCompatActivity {
         setContentView(R.layout.activity_remote);
         getOnBackPressedDispatcher().addCallback(this, backCallback);
 
-        PrefStore prefStore = new PrefStore(this);
-        String deviceId = getIntent().getStringExtra(EXTRA_DEVICE_ID);
+        prefStore = new PrefStore(this);
+        deviceId = getIntent().getStringExtra(EXTRA_DEVICE_ID);
         if (deviceId == null) {
             deviceId = prefStore.getLastDeviceId();
         }
@@ -87,9 +123,22 @@ public class RemoteActivity extends AppCompatActivity {
         webView = findViewById(R.id.web_view);
         errorOverlay = findViewById(R.id.error_overlay);
         Button retryButton = findViewById(R.id.btn_retry);
+        Button rescanButton = findViewById(R.id.btn_rescan);
+        Button openAnywayButton = findViewById(R.id.btn_open_anyway);
+
         retryButton.setOnClickListener(v -> {
-            errorOverlay.setVisibility(View.GONE);
-            webView.reload();
+            hideOverlay();
+            if (pendingPrecheck) {
+                startPrecheck();
+            } else {
+                webView.reload();
+            }
+        });
+        rescanButton.setOnClickListener(v -> launchScanner());
+        openAnywayButton.setOnClickListener(v -> {
+            hideOverlay();
+            pendingPrecheck = false;
+            webView.loadUrl(remoteUrl);
         });
 
         WebSettings settings = webView.getSettings();
@@ -124,8 +173,9 @@ public class RemoteActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 // 只拦截主文档加载失败；子资源失败由页面自行降级。
-                if (request.isForMainFrame()) {
-                    showError(error == null ? null : String.valueOf(error.getDescription()));
+                if (request.isForMainFrame() && !pendingPrecheck) {
+                    showError(null, getString(R.string.error_load_failed,
+                            error == null ? "" : String.valueOf(error.getDescription())));
                 }
             }
 
@@ -156,19 +206,93 @@ public class RemoteActivity extends AppCompatActivity {
         });
 
         if (savedInstanceState != null) {
+            String savedUrl = prefStore.getDevice(deviceId) == null ? null : prefStore.getDevice(deviceId).url;
+            if (savedUrl != null) {
+                remoteUrl = savedUrl;
+            }
+            pendingPrecheck = false;
             webView.restoreState(savedInstanceState);
             if (webView.getUrl() == null) {
                 webView.loadUrl(remoteUrl);
             }
         } else {
-            webView.loadUrl(remoteUrl);
+            startPrecheck();
         }
     }
 
-    private void showError(String description) {
+    /** 打开官方页之前先验证凭据：VALID/UNKNOWN 直接进入；STALE 停下给重新扫码引导。 */
+    private void startPrecheck() {
+        pendingPrecheck = true;
+        final String url = remoteUrl;
+        final String sid = PairUrl.extractDeviceSid(url);
+        showError(null, getString(R.string.cred_checking));
+        final java.util.concurrent.ExecutorService exec = java.util.concurrent.Executors.newSingleThreadExecutor();
+        exec.execute(() -> {
+            RelayProbe.Result result = CredentialHealth.STATUS_STALE.equals(CredentialHealth.statusFor(prefStore, sid))
+                    ? RelayProbe.Result.STALE
+                    : RelayProbe.probe(url, 8_000);
+            if (result != RelayProbe.Result.STALE) {
+                prefStore.setCredStatus(sid, result == RelayProbe.Result.VALID
+                        ? CredentialHealth.STATUS_VALID : CredentialHealth.STATUS_UNKNOWN);
+            }
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || !pendingPrecheck || !url.equals(remoteUrl)) {
+                    return;
+                }
+                if (result == RelayProbe.Result.STALE) {
+                    prefStore.setCredStatus(sid, CredentialHealth.STATUS_STALE);
+                    showStale();
+                    return;
+                }
+                pendingPrecheck = false;
+                hideOverlay();
+                webView.loadUrl(remoteUrl);
+            });
+            exec.shutdown();
+        });
+    }
+
+    private void launchScanner() {
+        ScanOptions options = new ScanOptions();
+        options.setDesiredBarcodeFormats(ScanOptions.QR_CODE);
+        options.setPrompt(getString(R.string.scan_prompt));
+        options.setBeepEnabled(false);
+        options.setOrientationLocked(true);
+        rescanLauncher.launch(options);
+    }
+
+    private void showStale() {
         errorOverlay.setVisibility(View.VISIBLE);
-        TextView message = findViewById(R.id.error_message);
-        message.setText(getString(R.string.error_load_failed, description == null ? "" : description));
+        TextView errorTitle = findViewById(R.id.error_title);
+        TextView errorMessage = findViewById(R.id.error_message);
+        PairedDevice device = prefStore.getDevice(deviceId);
+        errorTitle.setVisibility(View.VISIBLE);
+        errorTitle.setText(R.string.stale_title);
+        errorMessage.setText(getString(R.string.stale_message,
+                device == null ? getString(R.string.hero_title) : device.name));
+        findViewById(R.id.btn_retry).setVisibility(View.GONE);
+        findViewById(R.id.btn_rescan).setVisibility(View.VISIBLE);
+        findViewById(R.id.btn_open_anyway).setVisibility(View.VISIBLE);
+    }
+
+    private void showError(String title, String message) {
+        errorOverlay.setVisibility(View.VISIBLE);
+        TextView errorTitle = findViewById(R.id.error_title);
+        TextView errorMessage = findViewById(R.id.error_message);
+        if (title == null) {
+            errorTitle.setVisibility(View.GONE);
+        } else {
+            errorTitle.setVisibility(View.VISIBLE);
+            errorTitle.setText(title);
+        }
+        errorMessage.setText(message);
+        findViewById(R.id.btn_retry).setVisibility(View.VISIBLE);
+        findViewById(R.id.btn_rescan).setVisibility(View.GONE);
+        findViewById(R.id.btn_open_anyway).setVisibility(View.GONE);
+    }
+
+    private void hideOverlay() {
+        errorOverlay.setVisibility(View.GONE);
     }
 
     @Override

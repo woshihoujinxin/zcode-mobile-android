@@ -17,6 +17,8 @@ public final class PrefStore {
     private static final String PREFS = "zcode_mobile_prefs";
     private static final String KEY_DEVICES = "paired_devices";
     private static final String KEY_LAST_DEVICE = "last_device_id";
+    private static final String PREFIX_CRED_STATUS = "cred_status_";
+    private static final String PREFIX_CRED_PROBED = "cred_probed_";
     // 旧版单设备键，仅用于迁移。
     private static final String LEGACY_KEY_URL = "remote_url";
     private static final String LEGACY_KEY_NAME = "device_name";
@@ -66,7 +68,8 @@ public final class PrefStore {
                         item.getString("id"),
                         item.getString("url"),
                         item.getString("name"),
-                        item.getLong("boundAt")));
+                        item.getLong("boundAt"),
+                        item.has("mid") ? item.getString("mid") : null));
             }
         } catch (Exception ignored) {
             // 损坏的存储按空列表处理，重扫即可恢复。
@@ -74,14 +77,29 @@ public final class PrefStore {
         return devices;
     }
 
-    /** 按 id 去重：同 sid 视为同一桌面，重扫更新凭据（桌面重置配对后 hash 会变）。 */
+    /**
+     * 按 id 去重：同 sid 视为同一桌面，重扫更新凭据（桌面重置配对后 hash 会变）。
+     * 另外：桌面「重置配对」会换发新 sid 但 mid 不变——按 mid 命中的旧条目一并替换，
+     * 避免失效条目残留列表。旧版本条目没有 mid，退化用「二维码携带的桌面名」匹配。
+     */
     public void addOrReplace(PairedDevice device) {
         List<PairedDevice> devices = getDevices();
         List<PairedDevice> next = new ArrayList<>();
+        boolean hasRealName = device.name != null && !device.name.isEmpty()
+                && !"桌面端".equals(device.name);
         for (PairedDevice d : devices) {
-            if (!d.id.equals(device.id)) {
+            boolean sameSid = d.id.equals(device.id);
+            boolean sameMachine = device.mid != null && device.mid.equals(d.mid);
+            boolean legacySameName = d.mid == null && hasRealName && device.name.equals(d.name);
+            if (!sameSid && !sameMachine && !legacySameName) {
                 next.add(d);
+                continue;
             }
+            // 被替换条目的凭据状态随之作废。
+            prefs.edit()
+                    .remove(PREFIX_CRED_STATUS + d.id)
+                    .remove(PREFIX_CRED_PROBED + d.id)
+                    .apply();
         }
         next.add(device);
         saveDevices(next);
@@ -93,6 +111,11 @@ public final class PrefStore {
         for (PairedDevice d : getDevices()) {
             if (!d.id.equals(id)) {
                 next.add(d);
+            } else {
+                prefs.edit()
+                        .remove(PREFIX_CRED_STATUS + d.id)
+                        .remove(PREFIX_CRED_PROBED + d.id)
+                        .apply();
             }
         }
         saveDevices(next);
@@ -113,12 +136,50 @@ public final class PrefStore {
         return null;
     }
 
+    /** 按机器标识（mid）查找：桌面重置配对换发新 sid 后仍能认出同一台桌面。 */
+    public PairedDevice getDeviceByMid(String mid) {
+        if (mid == null) {
+            return null;
+        }
+        for (PairedDevice d : getDevices()) {
+            if (mid.equals(d.mid)) {
+                return d;
+            }
+        }
+        return null;
+    }
+
     public String getLastDeviceId() {
         return prefs.getString(KEY_LAST_DEVICE, null);
     }
 
     public void setLastDeviceId(String id) {
         prefs.edit().putString(KEY_LAST_DEVICE, id).apply();
+    }
+
+    /** 凭据健康度（CredentialHealth 持久化）。无记录返回 STATUS_UNKNOWN。 */
+    public String getCredStatus(String id) {
+        if (id == null) {
+            return CredentialHealth.STATUS_UNKNOWN;
+        }
+        return prefs.getString(PREFIX_CRED_STATUS + id, CredentialHealth.STATUS_UNKNOWN);
+    }
+
+    public long getCredProbedAt(String id) {
+        if (id == null) {
+            return 0;
+        }
+        return prefs.getLong(PREFIX_CRED_PROBED + id, 0);
+    }
+
+    public void setCredStatus(String id, String status) {
+        if (id == null) {
+            return;
+        }
+        prefs.edit()
+                .putString(PREFIX_CRED_STATUS + id, status)
+                .putLong(PREFIX_CRED_PROBED + id, System.currentTimeMillis())
+                .apply();
     }
 
     private void saveDevices(List<PairedDevice> devices) {
@@ -130,6 +191,9 @@ public final class PrefStore {
                 item.put("url", d.url);
                 item.put("name", d.name);
                 item.put("boundAt", d.boundAt);
+                if (d.mid != null) {
+                    item.put("mid", d.mid);
+                }
                 array.put(item);
             } catch (Exception ignored) {
             }
