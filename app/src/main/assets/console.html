@@ -71,12 +71,12 @@
   </aside>
   <main id="grid" class="g1"></main>
 </div>
-<div class="hintbar">凭据来自手机端扫码绑定，PC 在局域网内取到凭据后直连官方云建立独立会话（与手机互不转发）。格子卡在「Authenticating device…」约 30 秒后报失效 = 本机浏览器在跨域 iframe 内发不出认证应答（凭据本身有效）：点「新窗口打开」用独立标签页即可正常连接；独立标签也卡住则是本机网络/安全软件干扰 WebSocket，换个浏览器或关代理试试。</div>
+<div class="hintbar">凭据来自手机端扫码绑定，PC 直连官方云建立独立会话。注意：官方 relay 同一桌面只允许一个活跃终端——手机和 PC 同时连同一台时会互相接管（后连接/刷新的一端生效，另一端显示等待属正常）。格子卡在「Authenticating」时点「刷新」重试；手机想还回控制权，把手机上该会话页切后台即可。</div>
 <div id="toast"></div>
 <script>
 const qs = new URLSearchParams(location.search);
 const token = qs.get('token') || '';
-const state = { devices: [], tiles: [], layout: '1', nextSlot: 0, credsByKey: {}, lastVersion: null };
+const state = { devices: [], tiles: [], layout: '1', nextSlot: 0, credsByKey: {}, lastVersion: null, popped: {} };
 
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -158,7 +158,7 @@ function renderSidebar() {
     const st = statusOf(d);
     el.innerHTML = '<div class="name"><span class="dot ' + st.key + '"></span>' + escapeHtml(d.name) + '</div>'
       + '<div class="when">绑定于 ' + pad(when.getMonth()+1) + '-' + pad(when.getDate()) + ' · ' + escapeHtml(st.label) + '</div>'
-      + '<div class="open-hint">点击打开 · <a href="' + escapeHtml(d.url) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">新窗口打开</a> · <a href="#" data-copy="1" style="color:var(--dim);text-decoration:none;">复制链接</a></div>';
+      + '<div class="open-hint">点击打开 · <a href="#" data-popout="1" style="color:var(--accent);text-decoration:none;">新窗口打开</a> · <a href="#" data-copy="1" style="color:var(--dim);text-decoration:none;">复制链接</a></div>';
     el.onclick = (ev) => {
       const a = ev.target.closest && ev.target.closest('a');
       if (a && a.dataset.copy) {
@@ -167,7 +167,12 @@ function renderSidebar() {
           .then(() => toast('已复制连接链接，可粘贴到任意浏览器打开'), () => toast('复制失败'));
         return;
       }
-      if (a) return; // 「新窗口打开」链接交给浏览器处理
+      if (a && a.dataset.popout) {
+        ev.preventDefault();
+        openPopout(d);
+        return;
+      }
+      if (a) return;
       openTile(d);
     };
     box.appendChild(el);
@@ -208,8 +213,8 @@ function renderGrid() {
     const popout = document.createElement('button');
     popout.textContent = '新窗口打开';
     popout.className = 'accent';
-    popout.title = '用独立标签页直连官方云。格子内认证卡在「Authenticating」时，用这个最可靠。';
-    popout.onclick = () => window.open(tile.device.url, '_blank', 'noopener');
+    popout.title = '用独立标签页直连官方云。注意：同一桌面同一时间只有一个端能接管会话，打开新窗口会接管当前格子。';
+    popout.onclick = () => openPopout(tile.device);
     const close = document.createElement('button');
     close.textContent = '✕';
     close.onclick = () => {
@@ -247,8 +252,30 @@ function renderTileBars() {
 
 function machineKeyOf(d) { return d.mid || ('name:' + d.name); }
 
+// 同一桌面的 relay 终端槽位只有一个：PC 侧同一时间只保留一个连接入口。
+// 打开格子 → 关掉之前为它弹出的新窗口；弹出新窗口 → 关掉（并移除）对应格子。
+function openPopout(device) {
+  const key = machineKeyOf(device);
+  closeTileFor(device);
+  try { state.popped[key] && !state.popped[key].closed && state.popped[key].close(); } catch {}
+  state.popped[key] = window.open(device.url, '_blank', 'noopener');
+  renderMeta();
+}
+
+function closeTileFor(device) {
+  const key = machineKeyOf(device);
+  const tile = state.tiles.find(t => t.device && machineKeyOf(t.device) === key);
+  if (tile) {
+    state.tiles = state.tiles.filter(t => t !== tile);
+    renderGrid();
+  }
+}
+
 function openTile(device) {
-  const existing = state.tiles.find(t => t.device && machineKeyOf(t.device) === machineKeyOf(device));
+  const key = machineKeyOf(device);
+  try { state.popped[key] && !state.popped[key].closed && state.popped[key].close(); } catch {}
+  state.popped[key] = null;
+  const existing = state.tiles.find(t => t.device && machineKeyOf(t.device) === key);
   if (existing) {
     if (existing.device.id !== device.id || existing.device.url !== device.url) {
       // 手机端已换新凭据而格子还是旧凭据：立即换新。
