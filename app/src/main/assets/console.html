@@ -43,6 +43,8 @@
   .tile .bar .t .dot.stale { background: var(--bad); }
   .tile .bar button { background: none; border: none; color: var(--sub); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 6px; }
   .tile .bar button:hover { color: var(--fg); background: rgba(255,255,255,.06); }
+  .tile .bar button.accent { color: var(--accent); }
+  .tile .bar button.accent:hover { color: var(--fg); background: rgba(245,158,11,.12); }
   .tile iframe { flex: 1; width: 100%; border: 0; background: #000; }
   .empty { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--dim); gap: 8px; }
   .empty .big { font-size: 15px; color: var(--sub); }
@@ -69,7 +71,7 @@
   </aside>
   <main id="grid" class="g1"></main>
 </div>
-<div class="hintbar">凭据来自手机端扫码绑定，PC 在局域网内取到凭据后直连官方云建立独立会话（与手机互不转发）。凭据失效（桌面重置配对/长时间离线）时手机重新扫码，本页会自动换用新凭据恢复。布局：单屏 / 双列 / 四宫格。</div>
+<div class="hintbar">凭据来自手机端扫码绑定，PC 在局域网内取到凭据后直连官方云建立独立会话（与手机互不转发）。格子卡在「Authenticating device…」约 30 秒后报失效 = 本机浏览器在跨域 iframe 内发不出认证应答（凭据本身有效）：点「新窗口打开」用独立标签页即可正常连接；独立标签也卡住则是本机网络/安全软件干扰 WebSocket，换个浏览器或关代理试试。</div>
 <div id="toast"></div>
 <script>
 const qs = new URLSearchParams(location.search);
@@ -156,8 +158,18 @@ function renderSidebar() {
     const st = statusOf(d);
     el.innerHTML = '<div class="name"><span class="dot ' + st.key + '"></span>' + escapeHtml(d.name) + '</div>'
       + '<div class="when">绑定于 ' + pad(when.getMonth()+1) + '-' + pad(when.getDate()) + ' · ' + escapeHtml(st.label) + '</div>'
-      + '<div class="open-hint">点击打开</div>';
-    el.onclick = () => openTile(d);
+      + '<div class="open-hint">点击打开 · <a href="' + escapeHtml(d.url) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">新窗口打开</a> · <a href="#" data-copy="1" style="color:var(--dim);text-decoration:none;">复制链接</a></div>';
+    el.onclick = (ev) => {
+      const a = ev.target.closest && ev.target.closest('a');
+      if (a && a.dataset.copy) {
+        ev.preventDefault();
+        (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject())
+          .then(() => toast('已复制连接链接，可粘贴到任意浏览器打开'), () => toast('复制失败'));
+        return;
+      }
+      if (a) return; // 「新窗口打开」链接交给浏览器处理
+      openTile(d);
+    };
     box.appendChild(el);
   }
 }
@@ -193,6 +205,11 @@ function renderGrid() {
     const reload = document.createElement('button');
     reload.textContent = '刷新';
     reload.onclick = () => { const f = el.querySelector('iframe'); if (f) f.src = f.src; };
+    const popout = document.createElement('button');
+    popout.textContent = '新窗口打开';
+    popout.className = 'accent';
+    popout.title = '用独立标签页直连官方云。格子内认证卡在「Authenticating」时，用这个最可靠。';
+    popout.onclick = () => window.open(tile.device.url, '_blank', 'noopener');
     const close = document.createElement('button');
     close.textContent = '✕';
     close.onclick = () => {
@@ -200,7 +217,7 @@ function renderGrid() {
       renderGrid();
       renderMeta();
     };
-    bar.append(title, reload, close);
+    bar.append(title, reload, popout, close);
     el.appendChild(bar);
     const iframe = document.createElement('iframe');
     iframe.src = tile.device.url;
