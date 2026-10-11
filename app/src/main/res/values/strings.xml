@@ -44,7 +44,7 @@
     <string name="rescanned_reload">已更新凭据，正在重新连接…</string>
     <string name="btn_control">PC 群控</string>
     <string name="control_title">电脑群控台</string>
-    <string name="control_off_status">在同一 Wi-Fi 下，用电脑浏览器打开群控台，可网格化同时操作多台桌面的会话。</string>
+    <string name="control_off_status">服务运行期间，手机端已打开的会话会自动让出控制权（避免和 PC 互相抢占）；想在手机上接管，重新打开该会话即可。</string>
     <string name="control_on_status">服务运行中（关闭本弹窗或退出 App 后停止）：</string>
     <string name="control_start">启动服务</string>
     <string name="control_stop">停止服务</string>

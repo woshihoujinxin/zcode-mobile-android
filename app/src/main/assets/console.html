@@ -46,6 +46,8 @@
   .tile .bar button.accent { color: var(--accent); }
   .tile .bar button.accent:hover { color: var(--fg); background: rgba(245,158,11,.12); }
   .tile iframe { flex: 1; width: 100%; border: 0; background: #000; }
+  .tile:fullscreen { border-radius: 0; border: none; background: var(--bg); }
+  .tile:fullscreen .bar { font-size: 13px; }
   .empty { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--dim); gap: 8px; }
   .empty .big { font-size: 15px; color: var(--sub); }
   .hintbar { padding: 6px 16px; color: var(--dim); font-size: 11px; border-top: 1px solid var(--stroke); flex: none; }
@@ -215,6 +217,15 @@ function renderGrid() {
     popout.className = 'accent';
     popout.title = '用独立标签页直连官方云。注意：同一桌面同一时间只有一个端能接管会话，打开新窗口会接管当前格子。';
     popout.onclick = () => openPopout(tile.device);
+    const full = document.createElement('button');
+    full.textContent = '全屏';
+    full.title = '该格子全屏显示（Esc 退出）';
+    full.onclick = () => {
+      const target = el;
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      if (target.requestFullscreen) target.requestFullscreen();
+      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+    };
     const close = document.createElement('button');
     close.textContent = '✕';
     close.onclick = () => {
@@ -222,7 +233,7 @@ function renderGrid() {
       renderGrid();
       renderMeta();
     };
-    bar.append(title, reload, popout, close);
+    bar.append(title, reload, popout, full, close);
     el.appendChild(bar);
     const iframe = document.createElement('iframe');
     iframe.src = tile.device.url;

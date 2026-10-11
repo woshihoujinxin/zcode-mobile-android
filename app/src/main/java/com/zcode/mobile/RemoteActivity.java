@@ -36,6 +36,17 @@ public class RemoteActivity extends AppCompatActivity {
 
     public static final String EXTRA_DEVICE_ID = "device_id";
 
+    /** 当前活跃实例（同进程）。群控台启动时释放手机端会话，避免与 PC 端争夺唯一终端槽位。 */
+    private static RemoteActivity activeInstance;
+
+    /** 关闭正在使用的远控页（若在），释放手机端终端连接。 */
+    public static void releaseIfActive() {
+        RemoteActivity activity = activeInstance;
+        if (activity != null && !activity.isFinishing()) {
+            activity.finish();
+        }
+    }
+
     private WebView webView;
     private View errorOverlay;
     private PrefStore prefStore;
@@ -105,6 +116,7 @@ public class RemoteActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_remote);
+        activeInstance = this;
         getOnBackPressedDispatcher().addCallback(this, backCallback);
 
         prefStore = new PrefStore(this);
@@ -321,6 +333,9 @@ public class RemoteActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        if (activeInstance == this) {
+            activeInstance = null;
+        }
         if (webView != null) {
             webView.destroy();
             webView = null;

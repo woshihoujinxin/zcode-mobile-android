@@ -218,6 +218,9 @@ public class PairingActivity extends AppCompatActivity {
             });
             return;
         }
+        // 官方 relay 同一桌面只允许一个活跃终端：启动群控前先释放手机端会话，
+        // 否则手机后台页面的自动重连会和 PC 格子互相踢（表现为格子卡在 Authenticating）。
+        RemoteActivity.releaseIfActive();
         status.setText(R.string.control_off_status);
         urlView.setVisibility(View.GONE);
         qrView.setVisibility(View.GONE);
