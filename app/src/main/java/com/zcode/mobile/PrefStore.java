@@ -115,6 +115,8 @@ public final class PrefStore {
                 prefs.edit()
                         .remove(PREFIX_CRED_STATUS + d.id)
                         .remove(PREFIX_CRED_PROBED + d.id)
+                        .remove(PREFIX_AUTH_USER + d.id)
+                        .remove(PREFIX_AUTH_PASS + d.id)
                         .apply();
             }
         }
@@ -199,5 +201,35 @@ public final class PrefStore {
             }
         }
         prefs.edit().putString(KEY_DEVICES, array.toString()).apply();
+    }
+
+    /** 直连服务器的基本认证账号（nginx auth_basic）；null 表示尚未保存。 */
+    public String getAuthUser(String id) {
+        return id == null ? null : prefs.getString(PREFIX_AUTH_USER + id, null);
+    }
+
+    /** 直连服务器的基本认证密码；null 表示尚未保存。 */
+    public String getAuthPass(String id) {
+        return id == null ? null : prefs.getString(PREFIX_AUTH_PASS + id, null);
+    }
+
+    public void setAuth(String id, String user, String pass) {
+        if (id == null) {
+            return;
+        }
+        prefs.edit()
+                .putString(PREFIX_AUTH_USER + id, user)
+                .putString(PREFIX_AUTH_PASS + id, pass)
+                .apply();
+    }
+
+    public void clearAuth(String id) {
+        if (id == null) {
+            return;
+        }
+        prefs.edit()
+                .remove(PREFIX_AUTH_USER + id)
+                .remove(PREFIX_AUTH_PASS + id)
+                .apply();
     }
 }

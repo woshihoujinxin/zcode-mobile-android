@@ -67,9 +67,11 @@ public class PairingActivity extends AppCompatActivity {
         deviceList = findViewById(R.id.device_list);
         Button scanButton = findViewById(R.id.btn_scan_add);
         Button pasteButton = findViewById(R.id.btn_paste_add);
+        Button directButton = findViewById(R.id.btn_direct_add);
 
         scanButton.setOnClickListener(v -> startScanFlow());
         pasteButton.setOnClickListener(v -> showPasteDialog());
+        directButton.setOnClickListener(v -> showDirectDialog());
         findViewById(R.id.btn_control).setOnClickListener(v -> showControlDialog());
 
         handleDeepLink(getIntent());
@@ -339,6 +341,49 @@ public class PairingActivity extends AppCompatActivity {
                 .setView(container)
                 .setPositiveButton(R.string.dialog_connect, (dialog, which) ->
                         handlePairInput(input.getText().toString()))
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .show();
+    }
+
+    /** 直连自建服务器：手输地址（http/https 任意主机），无 relay 凭据，认证走 nginx 基本认证。 */
+    private void showDirectDialog() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(padding, padding / 2, padding, 0);
+        EditText urlInput = new EditText(this);
+        urlInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        urlInput.setHint(R.string.direct_hint);
+        urlInput.setText("154.89.149.1:8080");
+        EditText nameInput = new EditText(this);
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        nameInput.setHint(R.string.direct_name_hint);
+        nameInput.setText(R.string.direct_default_name);
+        form.addView(urlInput);
+        form.addView(nameInput);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.direct_title)
+                .setView(form)
+                .setPositiveButton(R.string.dialog_connect, (dialog, which) -> {
+                    String normalized = PairUrl.parseDirect(urlInput.getText().toString());
+                    if (normalized == null) {
+                        Toast.makeText(this, R.string.direct_invalid_message, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    String id = PairUrl.directDeviceId(normalized);
+                    String name = nameInput.getText().toString().trim();
+                    if (name.isEmpty()) {
+                        name = getString(R.string.direct_default_name);
+                    }
+                    PairedDevice existing = prefStore.getDevice(id);
+                    prefStore.addOrReplace(new PairedDevice(id, normalized, name, System.currentTimeMillis()));
+                    Toast.makeText(this,
+                            existing == null
+                                    ? getString(R.string.direct_saved_toast, name)
+                                    : getString(R.string.direct_updated_toast, name),
+                            Toast.LENGTH_SHORT).show();
+                    enterRemote(id);
+                })
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .show();
     }

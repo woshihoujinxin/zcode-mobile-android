@@ -100,6 +100,17 @@
             android:textColor="@color/fg_primary"
             android:textSize="15sp" />
 
+        <Button
+            android:id="@+id/btn_direct_add"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_btn_ghost"
+            android:stateListAnimator="@null"
+            android:text="@string/btn_direct_add"
+            android:textColor="@color/fg_primary"
+            android:textSize="15sp" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

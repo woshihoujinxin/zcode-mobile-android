@@ -13,6 +13,9 @@ import android.net.Uri;
 public final class PairUrl {
     private static final String[] ALLOWED_HOSTS = {"zcode.z.ai", "zcode.chatglm.site", "www.zcode.z.ai"};
 
+    /** 直连模式的设备 id 前缀：用户手动输入服务器地址（而非扫码配对）。 */
+    public static final String DIRECT_PREFIX = "direct:";
+
     private PairUrl() {
     }
 
@@ -27,6 +30,63 @@ public final class PairUrl {
             }
         }
         return false;
+    }
+
+    /** 该设备 id 是否为「直连服务器」模式（跳过 relay 凭据预检，允许 http 与同站导航）。 */
+    public static boolean isDirectDeviceId(String id) {
+        return id != null && id.startsWith(DIRECT_PREFIX);
+    }
+
+    /**
+     * 解析直连地址：用户在直连对话框手动输入，http/https 均可，任意主机，
+     * 不要求 sid/hash（自建 dsh web 的认证在 nginx 基本认证层）。
+     *
+     * @return 规范化后的地址（补齐末尾 /），不合法返回 null。
+     */
+    public static String parseDirect(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            trimmed = "http://" + trimmed;
+        }
+        Uri uri;
+        try {
+            uri = Uri.parse(trimmed);
+        } catch (Exception e) {
+            return null;
+        }
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+        if (scheme == null || host == null || host.trim().isEmpty()) {
+            return null;
+        }
+        boolean httpOrHttps = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+        if (!httpOrHttps) {
+            return null;
+        }
+        StringBuilder normalized = new StringBuilder();
+        normalized.append(scheme.toLowerCase()).append("://").append(host.toLowerCase());
+        if (uri.getPort() != -1) {
+            normalized.append(':').append(uri.getPort());
+        }
+        String path = uri.getPath();
+        if (path == null || path.isEmpty() || "/".equals(path)) {
+            normalized.append('/');
+        } else {
+            normalized.append(path);
+        }
+        return normalized.toString();
+    }
+
+    /** 直连设备的稳定唯一键：direct:host:port。同站重连复用同一条目并更新地址。 */
+    public static String directDeviceId(String url) {
+        Uri uri = Uri.parse(url);
+        return DIRECT_PREFIX + uri.getHost() + ":" + uri.getPort();
     }
 
     /** 返回 null 表示不合法；合法时返回规范化后的连接 URL。 */

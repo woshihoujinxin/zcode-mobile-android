@@ -9,8 +9,26 @@
     <string name="device_meta">绑定于 %1$s</string>
     <string name="btn_scan_add">扫码添加桌面端</string>
     <string name="btn_paste_add">粘贴连接链接</string>
+    <string name="btn_direct_add">直连自建服务器</string>
     <string name="btn_unbind">解除绑定</string>
     <string name="pair_hint">在电脑 ZCode 桌面端打开「Web 远程控制」生成二维码；\n多台电脑可分别扫码绑定，随时切换。</string>
+
+    <string name="direct_title">直连自建服务器</string>
+    <string name="direct_hint">服务器地址，如 154.89.149.1:8080</string>
+    <string name="direct_name_hint">名称（可选）</string>
+    <string name="direct_default_name">DSH 服务器</string>
+    <string name="direct_invalid_message">地址不合法：需要 http(s) 主机[:端口]</string>
+    <string name="direct_saved_toast">已添加「%1$s」</string>
+    <string name="direct_updated_toast">已更新「%1$s」的地址</string>
+
+    <string name="auth_title">登录 %1$s</string>
+    <string name="auth_message">该服务器开启了基本认证（与浏览器访问时的账密相同）</string>
+    <string name="auth_username_hint">用户名</string>
+    <string name="auth_password_hint">密码</string>
+
+    <string name="download_started">开始下载：%1$s</string>
+    <string name="download_done">已保存到下载目录：%1$s</string>
+    <string name="download_failed">下载失败：%1$s</string>
 
     <string name="scan_prompt">将二维码放入框内扫描</string>
     <string name="camera_permission_denied">需要相机权限才能扫描二维码，请在系统设置中授权</string>

@@ -75,6 +75,27 @@
 </div>
 <div class="hintbar">凭据来自手机端扫码绑定，PC 直连官方云建立独立会话。注意：官方 relay 同一桌面只允许一个活跃终端——手机和 PC 同时连同一台时会互相接管（后连接/刷新的一端生效，另一端显示等待属正常）。格子卡在「Authenticating」时点「刷新」重试；手机想还回控制权，把手机上该会话页切后台即可。</div>
 <div id="toast"></div>
+<div id="secwarn" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:99; overflow:auto; padding:32px;">
+  <div style="max-width:640px; margin:40px auto; background:var(--card); border:1px solid var(--stroke); border-radius:14px; padding:28px;">
+    <h2 style="font-size:17px; color:var(--accent); margin-bottom:12px;">需要一次性浏览器配置才能在格子内打开会话</h2>
+    <p style="color:var(--sub); font-size:13px; line-height:1.8;">
+      群控台当前通过局域网 IP（<b style="color:var(--fg)">${ORIGIN}</b>）访问，浏览器视其为「非受信源」：
+      官方会话页嵌入 iframe 后拿不到 WebCrypto，无法完成认证（表现为一直卡在 Authenticating，约 30 秒后报失效）。<br>
+      按下面步骤把本地址加入浏览器「不安全来源视为安全」名单（<b style="color:var(--fg)">每个电脑只需一次</b>）：
+    </p>
+    <ol style="color:var(--fg); font-size:13px; line-height:2; margin:14px 0; padding-left:22px;">
+      <li>新开标签页，地址栏输入 <b id="flagurl" style="color:var(--accent)">edge://flags/#unsafely-treat-insecure-origin-as-secure</b> 回车（Chrome 则把 edge 换成 chrome）</li>
+      <li>在输入框粘贴本地址（点下面按钮复制）：<b style="color:var(--accent)" id="origintext"></b></li>
+      <li>右侧下拉选 <b>Enabled</b> → 点底部 <b>Restart</b> 重启浏览器</li>
+      <li>重启后重新打开本页面，此提示消失、格子即可正常使用</li>
+    </ol>
+    <div style="display:flex; gap:10px; margin-top:18px;">
+      <button id="copyorigin" style="background:var(--accent); border:none; color:#111; font-weight:700; padding:10px 22px; border-radius:9px; cursor:pointer; font-size:13px;">复制本地址</button>
+      <button id="dismisswarn" style="background:var(--card); border:1px solid var(--stroke); color:var(--sub); padding:10px 22px; border-radius:9px; cursor:pointer; font-size:13px;">暂不配置，先用新窗口模式</button>
+    </div>
+    <p style="color:var(--dim); font-size:12px; margin-top:16px;">不配置也可以用：点设备后选「新窗口打开」（独立标签页不受影响）。设备列表与凭据状态显示不受此配置影响。</p>
+  </div>
+</div>
 <script>
 const qs = new URLSearchParams(location.search);
 const token = qs.get('token') || '';
@@ -330,6 +351,22 @@ for (const btn of document.querySelectorAll('.layout-btn')) {
     renderGrid();
   };
 }
+
+// 安全上下文检测：http://局域网IP 父页面会让 https iframe 丢失 WebCrypto（isSecureContext=false），
+// 官方会话页将无法完成认证。提示一次性浏览器配置；独立标签页模式不受影响。
+(function secureContextGuard() {
+  const warn = document.getElementById('secwarn');
+  if (!warn) return;
+  if (window.isSecureContext) { warn.style.display = 'none'; return; }
+  warn.style.display = 'block';
+  const origin = location.origin;
+  document.getElementById('origintext').textContent = origin;
+  document.getElementById('copyorigin').onclick = () => {
+    (navigator.clipboard ? navigator.clipboard.writeText(origin) : Promise.reject())
+      .then(() => toast('已复制：' + origin), () => toast('复制失败，请手动输入上方地址'));
+  };
+  document.getElementById('dismisswarn').onclick = () => { warn.style.display = 'none'; };
+})();
 
 loadDevices();
 setInterval(loadDevices, 5000);

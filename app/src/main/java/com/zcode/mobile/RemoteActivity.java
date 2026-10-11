@@ -5,7 +5,10 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
+import android.text.TextUtils;
 import android.view.View;
+import android.webkit.HttpAuthHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -14,6 +17,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -52,6 +57,8 @@ public class RemoteActivity extends AppCompatActivity {
     private PrefStore prefStore;
     private String deviceId;
     private String remoteUrl;
+    /** 直连模式：用户手动输入的自建 dsh 服务器（无 relay 凭据、可能为 http + 基本认证）。 */
+    private boolean directMode;
     /** 预检完成前不加载官方页，避免凭据已失效时闪过一屏英文错误。 */
     private boolean pendingPrecheck = true;
 
@@ -131,6 +138,7 @@ public class RemoteActivity extends AppCompatActivity {
         }
         prefStore.setLastDeviceId(device.id);
         remoteUrl = device.url;
+        directMode = PairUrl.isDirectDeviceId(device.id);
 
         webView = findViewById(R.id.web_view);
         errorOverlay = findViewById(R.id.error_overlay);
@@ -140,9 +148,10 @@ public class RemoteActivity extends AppCompatActivity {
 
         retryButton.setOnClickListener(v -> {
             hideOverlay();
-            if (pendingPrecheck) {
+            if (pendingPrecheck && !directMode) {
                 startPrecheck();
             } else {
+                pendingPrecheck = false;
                 webView.reload();
             }
         });
@@ -170,7 +179,15 @@ public class RemoteActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String host = uri.getHost();
-                if (host != null && PairUrl.isAllowedHost(host)
+                if (directMode) {
+                    // 直连模式：同站（含子域/端口不一致的静态资源由页面决定）留在 WebView，
+                    // 外链交给系统浏览器。
+                    String pageHost = Uri.parse(remoteUrl).getHost();
+                    if (host != null && (host.equalsIgnoreCase(pageHost)
+                            || (pageHost != null && host.endsWith("." + pageHost)))) {
+                        return false;
+                    }
+                } else if (host != null && PairUrl.isAllowedHost(host)
                         && "https".equalsIgnoreCase(uri.getScheme())) {
                     return false;
                 }
@@ -180,6 +197,30 @@ public class RemoteActivity extends AppCompatActivity {
                     // 无可处理的应用时静默忽略，停留当前页。
                 }
                 return true;
+            }
+
+            @Override
+            public void onReceivedHttpAuthRequest(WebView view, HttpAuthHandler handler,
+                                                  String host, String realm) {
+                if (!directMode) {
+                    handler.cancel();
+                    return;
+                }
+                String savedUser = prefStore.getAuthUser(deviceId);
+                String savedPass = prefStore.getAuthPass(deviceId);
+                if (savedUser != null && savedPass != null) {
+                    handler.proceed(savedUser, savedPass);
+                    return;
+                }
+                promptForAuth(handler, host, savedUser, savedPass);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (directMode) {
+                    // 每页就绪后重挂下载拦截（SPA 路由会换文档的情况也已覆盖）。
+                    view.evaluateJavascript(DshDownloader.clickInterceptorScript(), null);
+                }
             }
 
             @Override
@@ -198,6 +239,10 @@ public class RemoteActivity extends AppCompatActivity {
                 return true;
             }
         });
+
+        if (directMode) {
+            DshDownloader.installInto(webView, deviceId);
+        }
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -227,9 +272,46 @@ public class RemoteActivity extends AppCompatActivity {
             if (webView.getUrl() == null) {
                 webView.loadUrl(remoteUrl);
             }
+        } else if (directMode) {
+            // 直连模式没有 relay 凭据可预检，直接加载（认证失败由 onReceivedHttpAuthRequest 接住）。
+            pendingPrecheck = false;
+            hideOverlay();
+            webView.loadUrl(remoteUrl);
         } else {
             startPrecheck();
         }
+    }
+
+    /** 直连服务器的 nginx 基本认证：已有保存则直接过，否则弹一次输入框并记住。 */
+    private void promptForAuth(HttpAuthHandler handler, String host, String savedUser, String savedPass) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        form.setPadding(pad, pad / 2, pad, 0);
+        EditText userInput = new EditText(this);
+        userInput.setHint(R.string.auth_username_hint);
+        userInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        if (!TextUtils.isEmpty(savedUser)) {
+            userInput.setText(savedUser);
+        }
+        EditText passInput = new EditText(this);
+        passInput.setHint(R.string.auth_password_hint);
+        passInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        form.addView(userInput);
+        form.addView(passInput);
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.auth_title, host == null ? "" : host))
+                .setMessage(R.string.auth_message)
+                .setView(form)
+                .setCancelable(false)
+                .setPositiveButton(R.string.dialog_connect, (d, w) -> {
+                    String user = userInput.getText().toString().trim();
+                    String pass = passInput.getText().toString();
+                    prefStore.setAuth(deviceId, user, pass);
+                    handler.proceed(user, pass);
+                })
+                .setNegativeButton(R.string.dialog_cancel, (d, w) -> handler.cancel())
+                .show();
     }
 
     /** 打开官方页之前先验证凭据：VALID/UNKNOWN 直接进入；STALE 停下给重新扫码引导。 */
