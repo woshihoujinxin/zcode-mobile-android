@@ -189,11 +189,12 @@ public final class ControlServer {
                 return;
             }
             if (path.equals("/api/devices")) {
-                List<PairedDevice> devices = prefStore.getDevices();
-                // 群控台轮询即触发凭据健康度补探测（内部节流），凭据失效可被 PC 端及时看到。
-                CredentialHealth.refresh(context, devices, null);
+                // 注意：这里绝不能触发 CredentialHealth.refresh——probe 以 terminal 角色连 relay，
+                // 而同一桌面只允许一个活跃终端，周期性探测会把已配对的手机/PC 会话踢下线（KICKED）。
+                // 状态只在打开设备（RemoteActivity 预检）时更新。
                 StringBuilder versionSeed = new StringBuilder();
                 JSONArray array = new JSONArray();
+                List<PairedDevice> devices = prefStore.getDevices();
                 for (PairedDevice device : devices) {
                     JSONObject item = new JSONObject();
                     try {

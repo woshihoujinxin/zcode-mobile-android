@@ -124,19 +124,8 @@ public class PairingActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         renderDeviceList();
-        CredentialHealth.refresh(this, prefStore.getDevices(), this::renderDeviceStatuses);
-    }
-
-    /** 探测完成后只刷新状态点与 meta 行，不重建列表（避免打断点击）。 */
-    private void renderDeviceStatuses() {
-        for (int i = 0; i < deviceList.getChildCount(); i++) {
-            View item = deviceList.getChildAt(i);
-            String sid = (String) item.getTag(R.id.device_status_dot);
-            if (sid == null) {
-                continue;
-            }
-            applyStatus(item, prefStore.getDevice(sid));
-        }
+        // 不做后台探测：probe 以 terminal 角色连 relay，同一桌面只允许一个活跃终端，
+        // 自动探测会踢掉正在使用的手机/PC 会话。状态仅在打开设备预检时更新。
     }
 
     private void renderDeviceList() {
