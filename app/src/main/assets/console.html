@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZCode 群控台</title>
+<style>
+  :root {
+    --bg: #0d0d0d; --card: #1a1a1c; --stroke: #2a2a2e;
+    --fg: #f5f5f5; --sub: #9a9aa0; --dim: #6b6b72; --accent: #f59e0b;
+    --ok: #22c55e; --bad: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--stroke); flex: none; }
+  header .logo { width: 26px; height: 26px; border-radius: 7px; background: var(--card); border: 1px solid var(--stroke); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--accent); }
+  header h1 { font-size: 15px; font-weight: 600; }
+  header .meta { color: var(--sub); font-size: 12px; }
+  header .spacer { flex: 1; }
+  .layout-btn { background: var(--card); border: 1px solid var(--stroke); color: var(--fg); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .layout-btn.active { border-color: var(--accent); color: var(--accent); }
+  aside { width: 224px; border-right: 1px solid var(--stroke); padding: 12px; overflow-y: auto; flex: none; }
+  aside .section { color: var(--sub); font-size: 11px; letter-spacing: .08em; margin: 4px 0 10px; }
+  .device { background: var(--card); border: 1px solid var(--stroke); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s; }
+  .device:hover { border-color: var(--dim); }
+  .device.active { border-color: var(--accent); }
+  .device .name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .device .name .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--dim); }
+  .device .name .dot.valid { background: var(--ok); }
+  .device .name .dot.stale { background: var(--bad); }
+  .device .when { color: var(--sub); font-size: 11px; margin-top: 2px; }
+  .device .open-hint { color: var(--dim); font-size: 11px; margin-top: 6px; display: none; }
+  .device.active .open-hint { display: block; color: var(--accent); }
+  main { flex: 1; display: grid; gap: 10px; padding: 10px; overflow: hidden; }
+  main.g1 { grid-template-columns: 1fr; }
+  main.g2 { grid-template-columns: 1fr 1fr; }
+  main.g4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .tile { background: var(--card); border: 1px solid var(--stroke); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .tile .bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--stroke); flex: none; }
+  .tile .bar .t { font-size: 12px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
+  .tile .bar .t .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--dim); }
+  .tile .bar .t .dot.valid { background: var(--ok); }
+  .tile .bar .t .dot.stale { background: var(--bad); }
+  .tile .bar button { background: none; border: none; color: var(--sub); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 6px; }
+  .tile .bar button:hover { color: var(--fg); background: rgba(255,255,255,.06); }
+  .tile .bar button.accent { color: var(--accent); }
+  .tile .bar button.accent:hover { color: var(--fg); background: rgba(245,158,11,.12); }
+  .tile iframe { flex: 1; width: 100%; border: 0; background: #000; }
+  .tile:fullscreen { border-radius: 0; border: none; background: var(--bg); }
+  .tile:fullscreen .bar { font-size: 13px; }
+  .empty { grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--dim); gap: 8px; }
+  .empty .big { font-size: 15px; color: var(--sub); }
+  .hintbar { padding: 6px 16px; color: var(--dim); font-size: 11px; border-top: 1px solid var(--stroke); flex: none; }
+  #toast { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); background: #26262a; color: var(--fg); border: 1px solid var(--stroke); padding: 8px 16px; border-radius: 10px; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 900px) { aside { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Z</div>
+  <h1>ZCode 群控台</h1>
+  <span class="meta" id="meta">加载中…</span>
+  <div class="spacer"></div>
+  <button class="layout-btn active" data-g="1" title="单屏">单屏</button>
+  <button class="layout-btn" data-g="2" title="双列">双列</button>
+  <button class="layout-btn" data-g="4" title="四宫格">四宫格</button>
+</header>
+<div style="display:flex; flex:1; min-height:0;">
+  <aside>
+    <div class="section">已绑定桌面</div>
+    <div id="devices"></div>
+  </aside>
+  <main id="grid" class="g1"></main>
+</div>
+<div class="hintbar">凭据来自手机端扫码绑定，PC 直连官方云建立独立会话。注意：官方 relay 同一桌面只允许一个活跃终端——手机和 PC 同时连同一台时会互相接管（后连接/刷新的一端生效，另一端显示等待属正常）。格子卡在「Authenticating」时点「刷新」重试；手机想还回控制权，把手机上该会话页切后台即可。</div>
+<div id="toast"></div>
+<div id="secwarn" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:99; overflow:auto; padding:32px;">
+  <div style="max-width:640px; margin:40px auto; background:var(--card); border:1px solid var(--stroke); border-radius:14px; padding:28px;">
+    <h2 style="font-size:17px; color:var(--accent); margin-bottom:12px;">需要一次性浏览器配置才能在格子内打开会话</h2>
+    <p style="color:var(--sub); font-size:13px; line-height:1.8;">
+      群控台当前通过局域网 IP（<b style="color:var(--fg)">${ORIGIN}</b>）访问，浏览器视其为「非受信源」：
+      官方会话页嵌入 iframe 后拿不到 WebCrypto，无法完成认证（表现为一直卡在 Authenticating，约 30 秒后报失效）。<br>
+      按下面步骤把本地址加入浏览器「不安全来源视为安全」名单（<b style="color:var(--fg)">每个电脑只需一次</b>）：
+    </p>
+    <ol style="color:var(--fg); font-size:13px; line-height:2; margin:14px 0; padding-left:22px;">
+      <li>新开标签页，地址栏输入 <b id="flagurl" style="color:var(--accent)">edge://flags/#unsafely-treat-insecure-origin-as-secure</b> 回车（Chrome 则把 edge 换成 chrome）</li>
+      <li>在输入框粘贴本地址（点下面按钮复制）：<b style="color:var(--accent)" id="origintext"></b></li>
+      <li>右侧下拉选 <b>Enabled</b> → 点底部 <b>Restart</b> 重启浏览器</li>
+      <li>重启后重新打开本页面，此提示消失、格子即可正常使用</li>
+    </ol>
+    <div style="display:flex; gap:10px; margin-top:18px;">
+      <button id="copyorigin" style="background:var(--accent); border:none; color:#111; font-weight:700; padding:10px 22px; border-radius:9px; cursor:pointer; font-size:13px;">复制本地址</button>
+      <button id="dismisswarn" style="background:var(--card); border:1px solid var(--stroke); color:var(--sub); padding:10px 22px; border-radius:9px; cursor:pointer; font-size:13px;">暂不配置，先用新窗口模式</button>
+    </div>
+    <p style="color:var(--dim); font-size:12px; margin-top:16px;">不配置也可以用：点设备后选「新窗口打开」（独立标签页不受影响）。设备列表与凭据状态显示不受此配置影响。</p>
+  </div>
+</div>
+<script>
+const qs = new URLSearchParams(location.search);
+const token = qs.get('token') || '';
+const state = { devices: [], tiles: [], layout: '1', nextSlot: 0, credsByKey: {}, lastVersion: null, popped: {} };
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+function statusOf(d) {
+  if (d.credStatus === 'stale') {
+    const probed = d.credProbedAt ? new Date(d.credProbedAt) : null;
+    return { key: 'stale', label: '凭据已失效' + (probed ? '（' + pad(probed.getHours()) + ':' + pad(probed.getMinutes()) + ' 检测）' : '') };
+  }
+  if (d.credStatus === 'valid') return { key: 'valid', label: '凭据有效' };
+  return { key: 'unknown', label: '凭据未检测' };
+}
+const pad = n => String(n).padStart(2, '0');
+
+async function loadDevices() {
+  let data = null;
+  try {
+    const res = await fetch('/api/devices?token=' + encodeURIComponent(token), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+    state.devices = data.devices || [];
+  } catch (e) {
+    if (!state.devices.length) toast('设备列表加载失败：' + e.message);
+  }
+  if (!data) { renderMeta(); return; }
+
+  // 手机端重新扫码后凭据（url/credsHash，甚至 sid）会变化：同一台桌面（mid/名称相同）
+  // 凭据更新时自动换新凭据刷新对应 iframe，实现自愈。
+  let healed = 0;
+  for (const d of state.devices) {
+    const key = d.mid || ('name:' + d.name);
+    const prev = state.credsByKey[key];
+    if (prev && (prev.credsHash !== d.credsHash || prev.id !== d.id)) {
+      for (const tile of state.tiles) {
+        if (!tile.device) continue;
+        const tileKey = tile.device.mid || ('name:' + tile.device.name);
+        if (tileKey !== key) continue;
+        const oldId = tile.device.id;
+        tile.device = d;
+        const frame = document.querySelector('iframe[data-device-id="' + cssEscape(oldId) + '"]');
+        if (frame) { frame.src = d.url; frame.dataset.deviceId = d.id; }
+        const tileEl = document.querySelector('.tile[data-device-id="' + cssEscape(oldId) + '"]');
+        if (tileEl) tileEl.dataset.deviceId = d.id;
+        healed += 1;
+      }
+    }
+    state.credsByKey[key] = { credsHash: d.credsHash, id: d.id };
+  }
+  if (healed > 0) toast('检测到凭据更新，已自动重新连接 ' + healed + ' 台桌面');
+  else if (state.lastVersion && data.version !== state.lastVersion) { renderSidebar(); renderMeta(); }
+  state.lastVersion = data.version;
+  renderSidebar();
+  renderMeta();
+  renderTileBars();
+}
+
+function renderMeta() {
+  const stale = state.devices.filter(d => d.credStatus === 'stale').length;
+  document.getElementById('meta').textContent =
+    state.devices.length + ' 台桌面 · ' + state.tiles.length + ' 个会话窗口'
+    + (stale ? ' · ' + stale + ' 台凭据失效' : '');
+}
+
+function renderSidebar() {
+  const box = document.getElementById('devices');
+  box.innerHTML = '';
+  if (!state.devices.length) {
+    box.innerHTML = '<div style="color:var(--dim);font-size:12px;">手机上尚未绑定桌面端</div>';
+    return;
+  }
+  for (const d of state.devices) {
+    const el = document.createElement('div');
+    el.className = 'device';
+    const when = new Date(d.boundAt);
+    const st = statusOf(d);
+    el.innerHTML = '<div class="name"><span class="dot ' + st.key + '"></span>' + escapeHtml(d.name) + '</div>'
+      + '<div class="when">绑定于 ' + pad(when.getMonth()+1) + '-' + pad(when.getDate()) + ' · ' + escapeHtml(st.label) + '</div>'
+      + '<div class="open-hint">点击打开 · <a href="#" data-popout="1" style="color:var(--accent);text-decoration:none;">新窗口打开</a> · <a href="#" data-copy="1" style="color:var(--dim);text-decoration:none;">复制链接</a></div>';
+    el.onclick = (ev) => {
+      const a = ev.target.closest && ev.target.closest('a');
+      if (a && a.dataset.copy) {
+        ev.preventDefault();
+        (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject())
+          .then(() => toast('已复制连接链接，可粘贴到任意浏览器打开'), () => toast('复制失败'));
+        return;
+      }
+      if (a && a.dataset.popout) {
+        ev.preventDefault();
+        openPopout(d);
+        return;
+      }
+      if (a) return;
+      openTile(d);
+    };
+    box.appendChild(el);
+  }
+}
+
+function maxTiles() {
+  return state.layout === '1' ? 1 : state.layout === '2' ? 2 : 4;
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.className = 'g' + state.layout;
+  while (state.tiles.length > maxTiles()) {
+    state.tiles.pop();
+  }
+  if (!state.tiles.length) {
+    grid.innerHTML = '<div class="empty"><div class="big">从左侧选择一台桌面开始</div>'
+      + '<div>每个格子经手机下发的凭据直连官方云，是独立完整会话页，可同时监控 / 操作多台桌面</div></div>';
+    return;
+  }
+  grid.innerHTML = '';
+  for (const tile of state.tiles) {
+    const el = document.createElement('div');
+    el.className = 'tile';
+    el.dataset.deviceId = tile.device ? tile.device.id : '';
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const title = document.createElement('span');
+    title.className = 't';
+    const st = tile.device ? statusOf(tile.device) : null;
+    title.innerHTML = (st ? '<span class="dot ' + st.key + '" title="' + escapeHtml(st.label) + '"></span>' : '')
+      + escapeHtml(tile.device ? tile.device.name : '空');
+    title.title = st ? st.label : '';
+    const reload = document.createElement('button');
+    reload.textContent = '刷新';
+    reload.onclick = () => { const f = el.querySelector('iframe'); if (f) f.src = f.src; };
+    const popout = document.createElement('button');
+    popout.textContent = '新窗口打开';
+    popout.className = 'accent';
+    popout.title = '用独立标签页直连官方云。注意：同一桌面同一时间只有一个端能接管会话，打开新窗口会接管当前格子。';
+    popout.onclick = () => openPopout(tile.device);
+    const full = document.createElement('button');
+    full.textContent = '全屏';
+    full.title = '该格子全屏显示（Esc 退出）';
+    full.onclick = () => {
+      const target = el;
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      if (target.requestFullscreen) target.requestFullscreen();
+      else if (target.webkitRequestFullscreen) target.webkitRequestFullscreen();
+    };
+    const close = document.createElement('button');
+    close.textContent = '✕';
+    close.onclick = () => {
+      state.tiles = state.tiles.filter(t => t !== tile);
+      renderGrid();
+      renderMeta();
+    };
+    bar.append(title, reload, popout, full, close);
+    el.appendChild(bar);
+    const iframe = document.createElement('iframe');
+    iframe.src = tile.device.url;
+    iframe.dataset.deviceId = tile.device.id;
+    iframe.setAttribute('allow', 'clipboard-read; clipboard-write');
+    el.appendChild(iframe);
+    grid.appendChild(el);
+  }
+}
+
+/** 设备状态/凭据变化时只更新格子条与侧栏，不打断 iframe 会话。 */
+function renderTileBars() {
+  for (const tile of state.tiles) {
+    if (!tile.device) continue;
+    const fresh = state.devices.find(d => d.id === tile.device.id);
+    if (fresh) tile.device = fresh;
+    const tileEl = document.querySelector('.tile[data-device-id="' + cssEscape(tile.device.id) + '"]');
+    if (!tileEl) continue;
+    const titleEl = tileEl.querySelector('.t');
+    const st = statusOf(tile.device);
+    titleEl.innerHTML = '<span class="dot ' + st.key + '" title="' + escapeHtml(st.label) + '"></span>'
+      + escapeHtml(tile.device.name);
+    titleEl.title = st.label;
+  }
+  renderSidebar();
+}
+
+function machineKeyOf(d) { return d.mid || ('name:' + d.name); }
+
+// 同一桌面的 relay 终端槽位只有一个：PC 侧同一时间只保留一个连接入口。
+// 打开格子 → 关掉之前为它弹出的新窗口；弹出新窗口 → 关掉（并移除）对应格子。
+function openPopout(device) {
+  const key = machineKeyOf(device);
+  closeTileFor(device);
+  try { state.popped[key] && !state.popped[key].closed && state.popped[key].close(); } catch {}
+  state.popped[key] = window.open(device.url, '_blank', 'noopener');
+  renderMeta();
+}
+
+function closeTileFor(device) {
+  const key = machineKeyOf(device);
+  const tile = state.tiles.find(t => t.device && machineKeyOf(t.device) === key);
+  if (tile) {
+    state.tiles = state.tiles.filter(t => t !== tile);
+    renderGrid();
+  }
+}
+
+function openTile(device) {
+  const key = machineKeyOf(device);
+  try { state.popped[key] && !state.popped[key].closed && state.popped[key].close(); } catch {}
+  state.popped[key] = null;
+  const existing = state.tiles.find(t => t.device && machineKeyOf(t.device) === key);
+  if (existing) {
+    if (existing.device.id !== device.id || existing.device.url !== device.url) {
+      // 手机端已换新凭据而格子还是旧凭据：立即换新。
+      existing.device = device;
+      const f = document.querySelector('iframe[data-device-id="' + cssEscape(existing.device.id) + '"]');
+      if (f) f.src = device.url;
+      renderMeta();
+      toast(device.name + ' 已换用新凭据');
+      return;
+    }
+    // 再次点击 = 强制重连：原地刷新该格子的会话（踢掉僵尸连接，重新认证），不影响其它格子。
+    const f = document.querySelector('iframe[data-device-id="' + cssEscape(existing.device.id) + '"]');
+    if (f) f.src = existing.device.url;
+    toast(device.name + ' 已重新连接');
+    return;
+  }
+  const tile = { device };
+  if (state.tiles.length < maxTiles()) {
+    state.tiles.push(tile);
+  } else {
+    state.tiles[state.nextSlot % maxTiles()] = tile;
+    state.nextSlot += 1;
+  }
+  renderGrid();
+  renderMeta();
+}
+
+function cssEscape(s) {
+  return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/"/g, '\\"');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+for (const btn of document.querySelectorAll('.layout-btn')) {
+  btn.onclick = () => {
+    for (const b of document.querySelectorAll('.layout-btn')) b.classList.remove('active');
+    btn.classList.add('active');
+    state.layout = btn.dataset.g;
+    renderGrid();
+  };
+}
+
+// 安全上下文检测：http://局域网IP 父页面会让 https iframe 丢失 WebCrypto（isSecureContext=false），
+// 官方会话页将无法完成认证。提示一次性浏览器配置；独立标签页模式不受影响。
+(function secureContextGuard() {
+  const warn = document.getElementById('secwarn');
+  if (!warn) return;
+  if (window.isSecureContext) { warn.style.display = 'none'; return; }
+  warn.style.display = 'block';
+  const origin = location.origin;
+  document.getElementById('origintext').textContent = origin;
+  document.getElementById('copyorigin').onclick = () => {
+    (navigator.clipboard ? navigator.clipboard.writeText(origin) : Promise.reject())
+      .then(() => toast('已复制：' + origin), () => toast('复制失败，请手动输入上方地址'));
+  };
+  document.getElementById('dismisswarn').onclick = () => { warn.style.display = 'none'; };
+})();
+
+loadDevices();
+setInterval(loadDevices, 5000);
+</script>
+</body>
+</html>

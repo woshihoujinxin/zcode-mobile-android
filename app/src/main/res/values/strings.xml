@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ZCode</string>
+
+    <string name="hero_title">ZCode</string>
+    <string name="hero_subtitle">连接桌面端，接管你的 AI 会话</string>
+
+    <string name="device_list_title">我的桌面</string>
+    <string name="device_meta">绑定于 %1$s</string>
+    <string name="btn_scan_add">扫码添加桌面端</string>
+    <string name="btn_direct_add">直连自建服务器</string>
+    <string name="btn_unbind">解除绑定</string>
+    <string name="pair_hint">在电脑 ZCode 桌面端打开「Web 远程控制」生成二维码；\n多台电脑可分别扫码绑定，随时切换。</string>
+
+    <string name="direct_title">直连自建服务器</string>
+    <string name="direct_hint">服务器地址，如 https://your-server.com:8080</string>
+    <string name="direct_name_hint">名称（可选）</string>
+    <string name="direct_default_name">DSH 服务器</string>
+    <string name="direct_invalid_message">地址不合法：需要 http(s) 主机[:端口]</string>
+    <string name="direct_saved_toast">已添加「%1$s」</string>
+    <string name="direct_updated_toast">已更新「%1$s」的地址</string>
+
+    <string name="auth_title">登录 %1$s</string>
+    <string name="auth_message">该服务器开启了基本认证（与浏览器访问时的账密相同）</string>
+    <string name="auth_username_hint">用户名</string>
+    <string name="auth_password_hint">密码</string>
+
+    <string name="download_started">开始下载：%1$s</string>
+    <string name="download_done">已保存到下载目录：%1$s</string>
+    <string name="download_failed">下载失败：%1$s</string>
+
+    <string name="scan_prompt">将二维码放入框内扫描</string>
+    <string name="camera_permission_denied">需要相机权限才能扫描二维码，请在系统设置中授权</string>
+
+    <string name="invalid_qr_title">无法识别的二维码</string>
+    <string name="invalid_qr_message">这不是有效的 ZCode 远程控制二维码。请确认扫描的是桌面端「Web 远程控制」生成的二维码，或改用「粘贴连接链接」。</string>
+    <string name="paired_toast">已绑定「%1$s」</string>
+    <string name="repaired_toast">已更新「%1$s」的配对凭据</string>
+
+    <string name="unbind_title">解除绑定？</string>
+    <string name="unbind_message">将移除「%1$s」，之后需重新扫码才能连接该桌面。</string>
+    <string name="dialog_connect">连接</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_retry">重试</string>
+    <string name="dialog_unbind">解除绑定</string>
+
+    <string name="error_load_failed">页面加载失败：%1$s\n请检查网络后重试。</string>
+    <string name="btn_retry">重新加载</string>
+
+    <string name="cred_checking">正在验证配对凭据…</string>
+    <string name="cred_status_valid">凭据有效</string>
+    <string name="cred_status_stale">凭据已失效</string>
+    <string name="cred_status_unknown">未检测</string>
+    <string name="device_meta_with_status">绑定于 %1$s · %2$s</string>
+    <string name="stale_title">配对凭据已失效</string>
+    <string name="stale_message">「%1$s」的配对凭据已被服务端拒绝。\n\n常见原因：电脑端重置过配对（sid/hash 轮换），或电脑端长时间离线导致注册过期。\n\n请在电脑端重新打开「Web 远程控制」并扫码重新绑定；手机与 PC 群控台会在凭据更新后自动恢复。</string>
+    <string name="btn_rescan">重新扫码</string>
+    <string name="btn_open_anyway">仍要打开</string>
+    <string name="rescanned_reload">已更新凭据，正在重新连接…</string>
+    <string name="btn_control">PC 群控</string>
+    <string name="control_title">电脑群控台</string>
+    <string name="control_off_status">服务运行期间，手机端已打开的会话会自动让出控制权（避免和 PC 互相抢占）；想在手机上接管，重新打开该会话即可。</string>
+    <string name="control_on_status">服务运行中（关闭本弹窗或退出 App 后停止）：</string>
+    <string name="control_start">启动服务</string>
+    <string name="control_stop">停止服务</string>
+    <string name="control_copy">复制地址</string>
+    <string name="control_copied">已复制</string>
+    <string name="control_no_wifi">未找到 Wi-Fi 地址；请确认手机已连接 Wi-Fi（蜂窝网络下电脑无法访问）。</string>
+    <string name="control_qr_desc">群控台地址二维码</string>
+    <string name="control_error_toast">群控服务异常：%1$s</string>
+    <string name="control_hint">手机与电脑需连同一 Wi-Fi。地址含访问令牌，请勿外传；每个格子是独立完整会话页，支持单屏 / 双列 / 四宫格。</string>
+</resources>
